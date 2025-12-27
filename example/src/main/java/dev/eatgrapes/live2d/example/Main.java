@@ -46,7 +46,9 @@ public class Main {
             try (MemoryStack s = MemoryStack.stackPush()) {
                 IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1);
                 glfwGetWindowSize(win, wb, hb);
-                float nx = (float) (x / (wb.get(0) / 2.0) - 1.0);
+                float aspect = (float) wb.get(0) / hb.get(0);
+                // Map screen to NDC then to Model Space aspect
+                float nx = (float) (x / (wb.get(0) / 2.0) - 1.0) * aspect;
                 float ny = (float) (1.0 - y / (hb.get(0) / 2.0));
                 if (model != null) model.setDragging(nx, ny);
             }
@@ -59,15 +61,13 @@ public class Main {
                     IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1);
                     glfwGetCursorPos(win, xb, yb);
                     glfwGetWindowSize(win, wb, hb);
-                    float nx = (float) (xb.get(0) / (wb.get(0) / 2.0) - 1.0);
+                    
+                    float aspect = (float) wb.get(0) / hb.get(0);
+                    float nx = (float) (xb.get(0) / (wb.get(0) / 2.0) - 1.0) * aspect;
                     float ny = (float) (1.0 - yb.get(0) / (hb.get(0) / 2.0));
                     
-                    // Check Head first
-                    if (model.isHit("ArtMesh12", nx, ny)) {
-                        System.out.println("Head!");
-                        model.startMotion(motionCache.get("m01"), 3, null);
-                    } else if (model.isHit("HitArea", nx, ny)) {
-                        System.out.println("Body!");
+                    if (model.isHit("HitArea", nx, ny)) {
+                        System.out.println("Hit Body!");
                         model.startMotion(motionCache.get("m04"), 3, null);
                     }
                 } catch (Exception e) { e.printStackTrace(); }
@@ -95,11 +95,21 @@ public class Main {
     private void loop() {
         while (!glfwWindowShouldClose(window)) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
             try (MemoryStack s = MemoryStack.stackPush()) {
                 IntBuffer w = s.mallocInt(1), h = s.mallocInt(1);
                 glfwGetWindowSize(window, w, h);
                 glViewport(0, 0, w.get(0), h.get(0));
+                
+                float aspect = (float) w.get(0) / h.get(0);
+                // Simple ortho projection to maintain aspect ratio
+                for (int i = 0; i < 16; i++) mvp[i] = 0;
+                mvp[0] = 1.0f / aspect;
+                mvp[5] = 1.0f;
+                mvp[10] = 1.0f;
+                mvp[15] = 1.0f;
             }
+
             model.update(0.016f);
             model.draw(mvp);
             glfwSwapBuffers(window);
