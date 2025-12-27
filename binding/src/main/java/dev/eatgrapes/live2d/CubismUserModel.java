@@ -6,21 +6,12 @@ public class CubismUserModel extends Native {
     private Consumer<String> motionFinishedCallback;
 
     public CubismUserModel() {
-        super(0); // Temporary call to super
-        this.initPtr();
+        super(createNative());
+        initNative(_ptr);
     }
 
-    private void initPtr() {
-        try {
-            java.lang.reflect.Field field = Native.class.getDeclaredField("_ptr");
-            field.setAccessible(true);
-            field.set(this, createNative());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private native long createNative();
+    private static native long createNative();
+    private native void initNative(long ptr);
 
     public void loadModel(byte[] buffer) { loadModelNative(_ptr, buffer); }
     private static native void loadModelNative(long ptr, byte[] buffer);
@@ -40,22 +31,18 @@ public class CubismUserModel extends Native {
     public void registerTexture(int index, int textureId) { registerTextureNative(_ptr, index, textureId); }
     private static native void registerTextureNative(long ptr, int index, int textureId);
 
-    // Eye Tracking / Dragging
     public void setDragging(float x, float y) { setDraggingNative(_ptr, x, y); }
     private static native void setDraggingNative(long ptr, float x, float y);
 
-    // Hit Detection
     public boolean isHit(String drawableId, float x, float y) { return isHitNative(_ptr, drawableId, x, y); }
     private static native boolean isHitNative(long ptr, String drawableId, float x, float y);
 
-    // Motion Playback
     public void startMotion(byte[] buffer, int priority, Consumer<String> onFinished) {
         this.motionFinishedCallback = onFinished;
         startMotionNative(_ptr, buffer, priority);
     }
     private static native void startMotionNative(long ptr, byte[] buffer, int priority);
 
-    // Called from JNI
     private void onMotionFinished(String name) {
         if (motionFinishedCallback != null) {
             motionFinishedCallback.accept(name);

@@ -12,9 +12,12 @@ using namespace Live2D::Cubism::Framework::Rendering;
 
 class JniUserModel : public CubismUserModel {
 public:
-    JniUserModel(JNIEnv* env, jobject javaObj) {
+    JniUserModel(JNIEnv* env) {
         env->GetJavaVM(&_jvm);
-        _javaObj = env->NewGlobalRef(javaObj);
+    }
+
+    void setJavaObj(JNIEnv* env, jobject obj) {
+        _javaObj = env->NewGlobalRef(obj);
     }
 
     ~JniUserModel() {
@@ -42,22 +45,18 @@ public:
         std::vector<csmByte> motionBuf(buffer, buffer + size);
         auto* motion = CubismMotion::Create(motionBuf.data(), (csmSizeInt)motionBuf.size());
         if (!motion) return;
-
         _motionBuffers[motion] = std::move(motionBuf);
-        
         motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self) {
             auto* m = static_cast<CubismMotion*>(self);
             auto* model = static_cast<JniUserModel*>(m->GetFinishedMotionCustomData());
             model->onMotionEnd(m);
         }, this);
-
         _motionManager->StartMotionPriority(motion, true, priority);
     }
 
     void onMotionEnd(CubismMotion* motion) {
         _motionBuffers.erase(motion);
         CubismMotion::Delete(motion);
-        
         JNIEnv* env = getEnv();
         if (!env || !_javaObj) return;
         jclass cls = env->GetObjectClass(_javaObj);
@@ -69,9 +68,7 @@ public:
 
     bool isHitTransformed(const char* id, float x, float y) {
         if (!_model || !_modelMatrix) return false;
-        float mx = _modelMatrix->InvertTransformX(x);
-        float my = _modelMatrix->InvertTransformY(y);
-        return IsHit(CubismFramework::GetIdManager()->GetId(id), mx, my);
+        return IsHit(CubismFramework::GetIdManager()->GetId(id), _modelMatrix->InvertTransformX(x), _modelMatrix->InvertTransformY(y));
     }
 
     void update(float dt) {
@@ -98,17 +95,20 @@ private:
         if (_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) _jvm->AttachCurrentThread((void**)&env, nullptr);
         return env;
     }
-
     JavaVM* _jvm;
-    jobject _javaObj;
+    jobject _javaObj = nullptr;
     std::vector<csmByte> _mocBuffer, _physicsBuffer, _poseBuffer;
     std::map<CubismMotion*, std::vector<csmByte>> _motionBuffers;
 };
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createNative(JNIEnv* env, jobject thiz) {
-    return (jlong) new JniUserModel(env, thiz);
+JNIEXPORT jlong JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createNative(JNIEnv* env, jclass) {
+    return (jlong) new JniUserModel(env);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_initNative(JNIEnv* env, jobject thiz, jlong ptr) {
+    ((JniUserModel*)ptr)->setJavaObj(env, thiz);
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_deleteNative(JNIEnv*, jclass, jlong ptr) {
