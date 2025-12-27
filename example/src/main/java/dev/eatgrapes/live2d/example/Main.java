@@ -16,6 +16,7 @@ import java.nio.file.StandardCopyOption;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 
 public class Main {
     private long window;
