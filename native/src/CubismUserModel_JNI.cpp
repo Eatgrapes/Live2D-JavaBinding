@@ -13,9 +13,12 @@ using namespace Live2D::Cubism::Framework::Rendering;
 
 class JniUserModel : public CubismUserModel {
 public:
-    JniUserModel(JNIEnv* env, jobject javaObj) {
+    JniUserModel(JNIEnv* env) {
         env->GetJavaVM(&_jvm);
-        _javaObj = env->NewGlobalRef(javaObj);
+    }
+
+    void link(JNIEnv* env, jobject obj) {
+        _javaObj = env->NewGlobalRef(obj);
     }
 
     ~JniUserModel() {
@@ -43,15 +46,12 @@ public:
         std::vector<csmByte> motionBuf(buffer, buffer + size);
         auto* motion = CubismMotion::Create(motionBuf.data(), (csmSizeInt)motionBuf.size());
         if (!motion) return;
-
         _motionBuffers[motion] = std::move(motionBuf);
-        
         motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self) {
             auto* m = static_cast<CubismMotion*>(self);
             auto* model = static_cast<JniUserModel*>(m->GetFinishedMotionCustomData());
             model->queueFinishedMotion(m);
         }, this);
-
         _motionManager->StartMotionPriority(motion, true, priority);
     }
 
@@ -62,7 +62,6 @@ public:
 
     void update(float dt) {
         if (!_model) return;
-
         {
             std::lock_guard<std::mutex> lock(_pendingMutex);
             for (auto* m : _pendingDeletion) {
@@ -72,12 +71,10 @@ public:
             }
             _pendingDeletion.clear();
         }
-
         _model->LoadParameters();
         _motionManager->UpdateMotion(_model, dt);
         _model->SaveParameters();
         if (_pose) _pose->UpdateParameters(_model, dt);
-        
         if (_dragManager) {
             _dragManager->Update(dt);
             auto* idm = CubismFramework::GetIdManager();
@@ -86,7 +83,6 @@ public:
             _model->AddParameterValue(idm->GetId("ParamEyeBallX"), _dragManager->GetX());
             _model->AddParameterValue(idm->GetId("ParamEyeBallY"), _dragManager->GetY());
         }
-
         if (_physics) _physics->Evaluate(_model, dt);
         _model->Update();
     }
@@ -112,9 +108,8 @@ private:
         if (_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) _jvm->AttachCurrentThread((void**)&env, nullptr);
         return env;
     }
-
     JavaVM* _jvm;
-    jobject _javaObj;
+    jobject _javaObj = nullptr;
     std::vector<csmByte> _mocBuffer, _physicsBuffer, _poseBuffer;
     std::map<CubismMotion*, std::vector<csmByte>> _motionBuffers;
     std::vector<CubismMotion*> _pendingDeletion;
@@ -123,8 +118,15 @@ private:
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createNative(JNIEnv* env, jobject thiz) {
-    return (jlong) new JniUserModel(env, thiz);
+JNIEXPORT jlong JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createNative(JNIEnv* env, jclass) {
+    return (jlong) new JniUserModel(env);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_linkNative(JNIEnv* env, jobject thiz) {
+    jclass cls = env->GetObjectClass(thiz);
+    jfieldID fid = env->GetFieldID(cls, "_ptr", "J");
+    jlong ptr = env->GetLongField(thiz, fid);
+    ((JniUserModel*)ptr)->link(env, thiz);
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_deleteNative(JNIEnv*, jclass, jlong ptr) {
