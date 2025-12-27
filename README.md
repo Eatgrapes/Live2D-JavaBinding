@@ -3,7 +3,7 @@
 A Native Java binding for the Live2D Cubism SDK.
 
 > **Status: Work in Progress**  
-> This project is currently under development. Basic model display, interaction, and remote control are implemented.
+> This project is currently under development
 
 ## Features
 
@@ -47,7 +47,7 @@ model.draw(mvpMatrix);
 - `binding/`: Java API and module definitions.
 - `native/`: JNI implementation and CMake build scripts.
 - `scripts/`: Python build automation for all platforms.
-- `example/`: A complete Maven-based example using LWJGL 3, including a Swing control panel.
+- `example/`: A complete Maven-based example using LWJGL 3
 
 ## Building
 
