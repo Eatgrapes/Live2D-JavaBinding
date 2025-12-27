@@ -25,6 +25,9 @@ public class CubismUserModel extends Native {
     public void loadExpression(byte[] buffer, String name) { loadExpressionNative(_ptr, buffer, name); }
     private static native void loadExpressionNative(long ptr, byte[] buffer, String name);
 
+    public void setExpression(String name) { setExpressionNative(_ptr, name); }
+    private static native void setExpressionNative(long ptr, String name);
+
     public void createRenderer() { createRendererNative(_ptr); }
     private static native void createRendererNative(long ptr);
 

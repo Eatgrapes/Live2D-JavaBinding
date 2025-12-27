@@ -3,6 +3,7 @@
 #include <Id/CubismIdManager.hpp>
 #include <Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp>
 #include <Motion/CubismMotion.hpp>
+#include <Motion/CubismExpressionMotion.hpp>
 #include <vector>
 #include <string>
 #include <map>
@@ -26,6 +27,7 @@ public:
         JNIEnv* env = getEnv();
         if (env && _javaObj) env->DeleteGlobalRef(_javaObj);
         for (auto& it : _motionBuffers) CubismMotion::Delete(it.first);
+        for (auto& it : _expressions) ACubismMotion::Delete(it.second);
     }
 
     void loadModelCopy(const csmByte* buffer, csmSizeInt size) {
@@ -42,6 +44,21 @@ public:
     void loadPoseCopy(const csmByte* buffer, csmSizeInt size) {
         _poseBuffer.assign(buffer, buffer + size);
         LoadPose(_poseBuffer.data(), (csmSizeInt)_poseBuffer.size());
+    }
+
+    void loadExpressionCopy(const csmByte* buffer, csmSizeInt size, const std::string& name) {
+        std::vector<csmByte> exprBuf(buffer, buffer + size);
+        auto* expr = LoadExpression(exprBuf.data(), (csmSizeInt)exprBuf.size(), name.c_str());
+        if (expr) {
+            _expressions[name] = expr;
+            _expressionBuffers[name] = std::move(exprBuf);
+        }
+    }
+
+    void setExpression(const std::string& name) {
+        if (_expressions.count(name)) {
+            _expressionManager->StartMotionPriority(_expressions[name], false, 3);
+        }
     }
 
     void startMotionCopy(const csmByte* buffer, csmSizeInt size, int priority, bool loop) {
@@ -87,6 +104,10 @@ public:
         _motionManager->UpdateMotion(_model, dt);
         _model->SaveParameters();
 
+        if (_expressionManager) {
+            _expressionManager->UpdateMotion(_model, dt);
+        }
+
         if (_pose) _pose->UpdateParameters(_model, dt);
         
         if (_dragManager) {
@@ -130,6 +151,8 @@ private:
     jobject _javaObj = nullptr;
     std::vector<csmByte> _mocBuffer, _physicsBuffer, _poseBuffer;
     std::map<CubismMotion*, std::vector<csmByte>> _motionBuffers;
+    std::map<std::string, std::vector<csmByte>> _expressionBuffers;
+    std::map<std::string, ACubismMotion*> _expressions;
     std::vector<CubismMotion*> _pendingDeletion;
     std::mutex _pendingMutex;
 };
@@ -176,8 +199,14 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_loadExpressionN
     const char* n = env->GetStringUTFChars(name, nullptr);
     jsize len = env->GetArrayLength(buffer);
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
-    ((JniUserModel*)ptr)->LoadExpression((const csmByte*)data, len, n);
+    ((JniUserModel*)ptr)->loadExpressionCopy((const csmByte*)data, len, n);
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+    env->ReleaseStringUTFChars(name, n);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setExpressionNative(JNIEnv* env, jclass, jlong ptr, jstring name) {
+    const char* n = env->GetStringUTFChars(name, nullptr);
+    ((JniUserModel*)ptr)->setExpression(n);
     env->ReleaseStringUTFChars(name, n);
 }
 

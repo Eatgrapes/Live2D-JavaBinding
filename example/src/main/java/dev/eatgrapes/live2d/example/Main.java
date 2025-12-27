@@ -45,10 +45,17 @@ public class Main {
             String query = t.getRequestURI().getQuery();
             String id = query.split("=")[1];
             taskQueue.add(() -> {
-                try {
+                if (motions.containsKey(id)) {
                     model.startMotion(motions.get(id), 3, false, null);
-                } catch (Exception e) { e.printStackTrace(); }
+                }
             });
+            t.sendResponseHeaders(200, 0);
+            t.close();
+        });
+        server.createContext("/expression", t -> {
+            String query = t.getRequestURI().getQuery();
+            String name = query.split("=")[1];
+            taskQueue.add(() -> model.setExpression(name));
             t.sendResponseHeaders(200, 0);
             t.close();
         });
@@ -88,8 +95,8 @@ public class Main {
         model.createRenderer();
         model.registerTexture(0, loadTex("/model/Hiyori/Hiyori.2048/texture_00.png"));
         model.registerTexture(1, loadTex("/model/Hiyori/Hiyori.2048/texture_01.png"));
-        motions.put("m01", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
-        motions.put("m04", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
+        motions.put("idle", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
+        motions.put("tap_body", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
     }
 
     private void loop() {
