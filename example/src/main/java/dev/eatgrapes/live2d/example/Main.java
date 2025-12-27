@@ -1,5 +1,6 @@
 package dev.eatgrapes.live2d.example;
 
+import com.sun.net.httpserver.HttpServer;
 import dev.eatgrapes.live2d.CubismFramework;
 import dev.eatgrapes.live2d.CubismUserModel;
 import org.lwjgl.opengl.GL;
@@ -7,6 +8,7 @@ import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;
 
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
@@ -15,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -25,17 +28,38 @@ public class Main {
     private CubismUserModel model;
     private final Map<String, byte[]> motions = new HashMap<>();
     private final float[] mvp = new float[]{1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    private final ConcurrentLinkedQueue<Runnable> taskQueue = new ConcurrentLinkedQueue<>();
 
     public void run() throws Exception {
         init();
         setup();
+        startServer();
+        ControlPanel.show();
         loop();
         cleanup();
     }
 
+    private void startServer() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+        server.createContext("/motion", t -> {
+            String query = t.getRequestURI().getQuery();
+            String id = query.split("=")[1];
+            taskQueue.add(() -> {
+                try {
+                    model.startMotion(motions.get(id), 3, false, null);
+                } catch (Exception e) { e.printStackTrace(); }
+            });
+            t.sendResponseHeaders(200, 0);
+            t.close();
+        });
+        server.setExecutor(null);
+        server.start();
+        System.out.println("Control server started on port 8080");
+    }
+
     private void init() {
         if (!glfwInit()) throw new RuntimeException("GLFW failed");
-        window = glfwCreateWindow(800, 800, "Live2D Interaction", 0, 0);
+        window = glfwCreateWindow(800, 800, "Live2D Example", 0, 0);
         glfwMakeContextCurrent(window);
         GL.createCapabilities();
         glfwSwapInterval(1);
@@ -52,47 +76,28 @@ public class Main {
                 if (model != null) model.setDragging(nx, ny);
             }
         });
-
-        glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
-            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-                try (MemoryStack s = MemoryStack.stackPush()) {
-                    DoubleBuffer xb = s.mallocDouble(1), yb = s.mallocDouble(1);
-                    IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1);
-                    glfwGetCursorPos(win, xb, yb);
-                    glfwGetWindowSize(win, wb, hb);
-                    float aspect = (float) wb.get(0) / hb.get(0);
-                    float nx = (float) (xb.get(0) / (wb.get(0) / 2.0) - 1.0) * aspect;
-                    float ny = (float) (1.0 - yb.get(0) / (hb.get(0) / 2.0));
-                    
-                    if (model.isHit("HitArea", nx, ny)) {
-                        System.out.println("Hit Body!");
-                        model.startMotion(motions.get("m04"), 3, false, null);
-                    }
-                } catch (Exception e) { e.printStackTrace(); }
-            }
-        });
     }
 
     private void setup() throws Exception {
         CubismFramework.startUp();
         CubismFramework.initialize();
-
         model = new CubismUserModel();
         model.loadModel(load("/model/Hiyori/Hiyori.moc3"));
         model.loadPose(load("/model/Hiyori/Hiyori.pose3.json"));
         model.loadPhysics(load("/model/Hiyori/Hiyori.physics3.json"));
         model.createRenderer();
-
         model.registerTexture(0, loadTex("/model/Hiyori/Hiyori.2048/texture_00.png"));
         model.registerTexture(1, loadTex("/model/Hiyori/Hiyori.2048/texture_01.png"));
-
+        motions.put("m01", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
         motions.put("m04", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
     }
 
     private void loop() {
         while (!glfwWindowShouldClose(window)) {
+            Runnable task;
+            while ((task = taskQueue.poll()) != null) task.run();
+
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            
             try (MemoryStack s = MemoryStack.stackPush()) {
                 IntBuffer w = s.mallocInt(1), h = s.mallocInt(1);
                 glfwGetWindowSize(window, w, h);
@@ -101,7 +106,6 @@ public class Main {
                 for (int i = 0; i < 16; i++) mvp[i] = 0;
                 mvp[0] = 1.0f / aspect; mvp[5] = 1.0f; mvp[10] = 1.0f; mvp[15] = 1.0f;
             }
-
             model.update(0.016f);
             model.draw(mvp);
             glfwSwapBuffers(window);
