@@ -43,14 +43,14 @@ public class CubismUserModel extends Native {
     }
     private static native void startMotionNative(long ptr, byte[] buffer, int priority, boolean loop);
 
+    public boolean isMotionFinished() { return isMotionFinishedNative(_ptr); }
+    private static native boolean isMotionFinishedNative(long ptr);
+
     private void onMotionFinished(String name) {
         if (motionFinishedCallback != null) {
             motionFinishedCallback.accept(name);
         }
     }
-
-    public boolean isMotionFinished() { return isMotionFinishedNative(_ptr); }
-    private static native boolean isMotionFinishedNative(long ptr);
 
     public void update(float deltaTime) { updateNative(_ptr, deltaTime); }
     private static native void updateNative(long ptr, float deltaTime);

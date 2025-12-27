@@ -31,6 +31,7 @@ public:
     void loadModelCopy(const csmByte* buffer, csmSizeInt size) {
         _mocBuffer.assign(buffer, buffer + size);
         LoadModel(_mocBuffer.data(), (csmSizeInt)_mocBuffer.size());
+        if (_model) _model->SaveParameters();
     }
 
     void loadPhysicsCopy(const csmByte* buffer, csmSizeInt size) {
@@ -70,7 +71,6 @@ public:
     void update(float dt) {
         if (!_model) return;
 
-        // Cleanup finished motions safely
         {
             std::lock_guard<std::mutex> lock(_pendingMutex);
             for (auto* m : _pendingDeletion) {
@@ -84,13 +84,7 @@ public:
         }
 
         _model->LoadParameters();
-        
-        // Update motion and check if we are idle
-        bool isMotionPlaying = !_motionManager->IsFinished();
-        if (isMotionPlaying) {
-            _motionManager->UpdateMotion(_model, dt);
-        }
-        
+        _motionManager->UpdateMotion(_model, dt);
         _model->SaveParameters();
 
         if (_pose) _pose->UpdateParameters(_model, dt);
@@ -108,9 +102,7 @@ public:
         _model->Update();
     }
 
-    bool isMotionFinished() {
-        return _motionManager->IsFinished();
-    }
+    bool isMotionFinished() { return _motionManager->IsFinished(); }
 
     void notifyFinished() {
         JNIEnv* env = getEnv();
