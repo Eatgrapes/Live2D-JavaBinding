@@ -55,6 +55,7 @@ def get_tag():
     os_name = platform.system().lower()
     arch = platform.machine().lower()
     p = "macos" if "darwin" in os_name else os_name
+    # Handle aarch64 vs arm64 naming
     a = "arm64" if ("arm" in arch or "aarch64" in arch) else "x64"
     return f"{p}-{a}"
 

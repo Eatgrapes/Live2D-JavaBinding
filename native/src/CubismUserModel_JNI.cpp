@@ -20,7 +20,6 @@ public:
     ~JniUserModel() {
         JNIEnv* env = getEnv();
         if (env) env->DeleteGlobalRef(_javaObj);
-        // SDK's destructor handles _model, _renderer etc.
     }
 
     void loadModelCopy(const csmByte* buffer, csmSizeInt size) {
