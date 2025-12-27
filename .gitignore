@@ -1,6 +1,7 @@
 # Build outputs
 out/
 native/build/
+native/include/
 *.jar
 target/
 **/target/
