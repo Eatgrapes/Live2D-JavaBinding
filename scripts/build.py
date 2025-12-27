@@ -71,9 +71,10 @@ def build():
     classes = os.path.join(out, "classes")
     os.makedirs(classes)
     
+    # Shaders
     sd = os.path.join(classes, "live2d", "shaders")
     os.makedirs(sd)
-    ss = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/Shaders/Standard")
+    ss = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/Shaders/StandardES")
     for f in os.listdir(ss): shutil.copy(os.path.join(ss, f), sd)
 
     src = os.path.join(root, "binding/src/main/java")

@@ -38,6 +38,10 @@ public class Main {
         GL.createCapabilities();
         glfwSwapInterval(1);
 
+        // Required for Live2D transparency and masking
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
         glfwSetCursorPosCallback(window, (win, x, y) -> {
             float nx = (float) (x / 400.0 - 1.0);
             float ny = (float) (1.0 - y / 400.0);
@@ -108,6 +112,10 @@ public class Main {
         }
         tex = glGenTextures();
         glBindTexture(GL_TEXTURE_2D, tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
         STBImage.stbi_image_free(img);
         Files.delete(tmp);
