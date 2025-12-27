@@ -63,6 +63,9 @@ public class CubismUserModel extends Native {
     public float getCanvasHeight() { return getCanvasHeightNative(_ptr); }
     private static native float getCanvasHeightNative(long ptr);
 
+    public String[] getDrawableIds() { return getDrawableIdsNative(_ptr); }
+    private static native String[] getDrawableIdsNative(long ptr);
+
     public void draw(float[] mvpMatrix) { drawNative(_ptr, mvpMatrix); }
     private static native void drawNative(long ptr, float[] mvpMatrix);
 

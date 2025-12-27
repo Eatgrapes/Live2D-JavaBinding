@@ -44,25 +44,32 @@ public class Main {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         glfwSetCursorPosCallback(window, (win, x, y) -> {
-            float nx = (float) (x / 400.0 - 1.0);
-            float ny = (float) (1.0 - y / 400.0);
-            if (model != null) model.setDragging(nx, ny);
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                IntBuffer wb = stack.mallocInt(1), hb = stack.mallocInt(1);
+                glfwGetWindowSize(window, wb, hb);
+                float nx = (float) (x / (wb.get(0) / 2.0) - 1.0);
+                float ny = (float) (1.0 - y / (hb.get(0) / 2.0));
+                if (model != null) model.setDragging(nx, ny);
+            }
         });
 
         glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
             if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
                 try (MemoryStack stack = MemoryStack.stackPush()) {
-                    DoubleBuffer x = stack.mallocDouble(1), y = stack.mallocDouble(1);
-                    glfwGetCursorPos(window, x, y);
-                    float nx = (float) (x.get(0) / 400.0 - 1.0);
-                    float ny = (float) (1.0 - y.get(0) / 400.0);
+                    DoubleBuffer xb = stack.mallocDouble(1), yb = stack.mallocDouble(1);
+                    IntBuffer wb = stack.mallocInt(1), hb = stack.mallocInt(1);
+                    glfwGetCursorPos(window, xb, yb);
+                    glfwGetWindowSize(window, wb, hb);
                     
-                    if (model.isHit("Head", nx, ny)) {
-                        System.out.println("Hit Head!");
-                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m01.motion3.json"), 2, null);
-                    } else if (model.isHit("Body", nx, ny)) {
+                    float nx = (float) (xb.get(0) / (wb.get(0) / 2.0) - 1.0);
+                    float ny = (float) (1.0 - yb.get(0) / (hb.get(0) / 2.0));
+                    
+                    if (model.isHit("HitArea", nx, ny)) {
                         System.out.println("Hit Body!");
-                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m02.motion3.json"), 2, null);
+                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m04.motion3.json"), 2, null);
+                    } else if (model.isHit("ArtMesh12", nx, ny) || model.isHit("ArtMesh01", nx, ny)) {
+                        System.out.println("Hit Head/Face!");
+                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m01.motion3.json"), 2, null);
                     }
                 } catch (Exception e) { e.printStackTrace(); }
             }
@@ -79,6 +86,11 @@ public class Main {
         model.loadPhysics(load("/model/Hiyori/Hiyori.physics3.json"));
         model.createRenderer();
 
+        System.out.println("Drawable IDs:");
+        for (String id : model.getDrawableIds()) {
+            System.out.println("  " + id);
+        }
+
         model.registerTexture(0, loadTex("/model/Hiyori/Hiyori.2048/texture_00.png"));
         model.registerTexture(1, loadTex("/model/Hiyori/Hiyori.2048/texture_01.png"));
     }
@@ -86,6 +98,13 @@ public class Main {
     private void loop() {
         while (!glfwWindowShouldClose(window)) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                IntBuffer w = stack.mallocInt(1), h = stack.mallocInt(1);
+                glfwGetWindowSize(window, w, h);
+                glViewport(0, 0, w.get(0), h.get(0));
+            }
+
             model.update(0.016f);
             model.draw(mvp);
             glfwSwapBuffers(window);

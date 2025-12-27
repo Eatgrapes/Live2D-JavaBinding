@@ -5,7 +5,7 @@
 #include <Motion/CubismMotion.hpp>
 #include <vector>
 #include <string>
-#include <map>
+#include <iostream>
 
 using namespace Live2D::Cubism::Framework;
 using namespace Live2D::Cubism::Framework::Rendering;
@@ -34,7 +34,7 @@ public:
 
     void loadPoseCopy(const csmByte* buffer, csmSizeInt size) {
         _poseData.assign(buffer, buffer + size);
-        LoadPose(_poseData.data(), (csmSizeInt)_poseData.size());
+        LoadPose(_poseData.data(), (csmSizeInt)_physicsData.size());
     }
 
     void startMotion(const csmByte* buffer, csmSizeInt size, int priority) {
@@ -62,10 +62,15 @@ public:
 
     void update(float dt) {
         if (!_model) return;
+
         _model->LoadParameters();
-        if (!_motionManager->IsFinished()) _motionManager->UpdateMotion(_model, dt);
+        if (!_motionManager->IsFinished()) {
+            _motionManager->UpdateMotion(_model, dt);
+        }
         _model->SaveParameters();
 
+        if (_pose) _pose->UpdateParameters(_model, dt);
+        
         if (_dragManager) {
             _dragManager->Update(dt);
             auto* idm = CubismFramework::GetIdManager();
@@ -76,7 +81,6 @@ public:
             _model->AddParameterValue(idm->GetId("ParamEyeBallY"), _dragManager->GetY());
         }
 
-        if (_pose) _pose->UpdateParameters(_model, dt);
         if (_physics) _physics->Evaluate(_model, dt);
         _model->Update();
     }
@@ -180,6 +184,17 @@ JNIEXPORT jfloat JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getCanvasWidt
 
 JNIEXPORT jfloat JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getCanvasHeightNative(JNIEnv*, jclass, jlong ptr) {
     return ((JniUserModel*)ptr)->GetModel()->GetCanvasHeight();
+}
+
+JNIEXPORT jobjectArray JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getDrawableIdsNative(JNIEnv* env, jclass, jlong ptr) {
+    auto* model = ((JniUserModel*)ptr)->GetModel();
+    int count = model->GetDrawableCount();
+    jclass strCls = env->FindClass("java/lang/String");
+    jobjectArray res = env->NewObjectArray(count, strCls, nullptr);
+    for (int i = 0; i < count; i++) {
+        env->SetObjectArrayElement(res, i, env->NewStringUTF(model->GetDrawableId(i)->GetString().GetRawString()));
+    }
+    return res;
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_drawNative(JNIEnv* env, jclass, jlong ptr, jfloatArray matrix) {
