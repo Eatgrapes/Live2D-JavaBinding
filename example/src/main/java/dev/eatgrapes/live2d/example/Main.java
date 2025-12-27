@@ -57,10 +57,12 @@ public class Main {
                     float nx = (float) (x.get(0) / 400.0 - 1.0);
                     float ny = (float) (1.0 - y.get(0) / 400.0);
                     
-                    if (model.isHit("HitArea", nx, ny)) {
-                        System.out.println("Hit!");
-                        byte[] motion = load("/model/Hiyori/motions/Hiyori_m01.motion3.json");
-                        model.startMotion(motion, 2, name -> System.out.println("Motion finished: " + name));
+                    if (model.isHit("Head", nx, ny)) {
+                        System.out.println("Hit Head!");
+                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m01.motion3.json"), 2, null);
+                    } else if (model.isHit("Body", nx, ny)) {
+                        System.out.println("Hit Body!");
+                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m02.motion3.json"), 2, null);
                     }
                 } catch (Exception e) { e.printStackTrace(); }
             }
