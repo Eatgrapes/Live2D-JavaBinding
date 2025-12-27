@@ -12,53 +12,52 @@ using namespace Live2D::Cubism::Framework::Rendering;
 
 class JniUserModel : public CubismUserModel {
 public:
-    JniUserModel(JNIEnv* env) {
+    JniUserModel(JNIEnv* env, jobject javaObj) {
         env->GetJavaVM(&_jvm);
-    }
-
-    void initJavaObj(JNIEnv* env, jobject javaObj) {
         _javaObj = env->NewGlobalRef(javaObj);
     }
 
     ~JniUserModel() {
         JNIEnv* env = getEnv();
         if (env && _javaObj) env->DeleteGlobalRef(_javaObj);
-        for (auto& pair : _expressionData) pair.second.clear();
+        for (auto& it : _motionBuffers) CubismMotion::Delete(it.first);
     }
 
     void loadModelCopy(const csmByte* buffer, csmSizeInt size) {
-        _mocData.assign(buffer, buffer + size);
-        LoadModel(_mocData.data(), (csmSizeInt)_mocData.size());
+        _mocBuffer.assign(buffer, buffer + size);
+        LoadModel(_mocBuffer.data(), (csmSizeInt)_mocBuffer.size());
     }
 
     void loadPhysicsCopy(const csmByte* buffer, csmSizeInt size) {
-        _physicsData.assign(buffer, buffer + size);
-        LoadPhysics(_physicsData.data(), (csmSizeInt)_physicsData.size());
+        _physicsBuffer.assign(buffer, buffer + size);
+        LoadPhysics(_physicsBuffer.data(), (csmSizeInt)_physicsBuffer.size());
     }
 
     void loadPoseCopy(const csmByte* buffer, csmSizeInt size) {
-        _poseData.assign(buffer, buffer + size);
-        LoadPose(_poseData.data(), (csmSizeInt)_physicsData.size());
+        _poseBuffer.assign(buffer, buffer + size);
+        LoadPose(_poseBuffer.data(), (csmSizeInt)_poseBuffer.size());
     }
 
-    void loadExpressionCopy(const csmByte* buffer, csmSizeInt size, const std::string& name) {
-        auto& vec = _expressionData[name];
-        vec.assign(buffer, buffer + size);
-        LoadExpression(vec.data(), (csmSizeInt)vec.size(), name.c_str());
-    }
-
-    void startMotion(const csmByte* buffer, csmSizeInt size, int priority) {
-        auto* motion = CubismMotion::Create(buffer, size);
+    void startMotionCopy(const csmByte* buffer, csmSizeInt size, int priority) {
+        std::vector<csmByte> motionBuf(buffer, buffer + size);
+        auto* motion = CubismMotion::Create(motionBuf.data(), (csmSizeInt)motionBuf.size());
         if (!motion) return;
-        motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self) {
-            auto* m = static_cast<JniUserModel*>(self->GetFinishedMotionCustomData());
-            m->notifyFinished();
-            CubismMotion::Delete(static_cast<CubismMotion*>(self));
+
+        _motionBuffers[motion] = std::move(motionBuf);
+        
+        motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self, void* data) {
+            auto* model = static_cast<JniUserModel*>(data);
+            auto* m = static_cast<CubismMotion*>(self);
+            model->onMotionEnd(m);
         }, this);
+
         _motionManager->StartMotionPriority(motion, true, priority);
     }
 
-    void notifyFinished() {
+    void onMotionEnd(CubismMotion* motion) {
+        _motionBuffers.erase(motion);
+        CubismMotion::Delete(motion);
+        
         JNIEnv* env = getEnv();
         if (!env || !_javaObj) return;
         jclass cls = env->GetObjectClass(_javaObj);
@@ -68,17 +67,10 @@ public:
         env->DeleteLocalRef(name);
     }
 
-    bool isHitTransformed(const char* id, float x, float y) {
-        if (!_model) return false;
-        float mx = _modelMatrix->InvertTransformX(x);
-        float my = _modelMatrix->InvertTransformY(y);
-        return IsHit(CubismFramework::GetIdManager()->GetId(id), mx, my);
-    }
-
     void update(float dt) {
         if (!_model) return;
         _model->LoadParameters();
-        if (!_motionManager->IsFinished()) _motionManager->UpdateMotion(_model, dt);
+        _motionManager->UpdateMotion(_model, dt);
         _model->SaveParameters();
         if (_pose) _pose->UpdateParameters(_model, dt);
         if (_dragManager) {
@@ -101,19 +93,15 @@ private:
     }
 
     JavaVM* _jvm;
-    jobject _javaObj = nullptr;
-    std::vector<csmByte> _mocData, _physicsData, _poseData;
-    std::map<std::string, std::vector<csmByte>> _expressionData;
+    jobject _javaObj;
+    std::vector<csmByte> _mocBuffer, _physicsBuffer, _poseBuffer;
+    std::map<CubismMotion*, std::vector<csmByte>> _motionBuffers;
 };
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createNative(JNIEnv* env, jclass) {
-    return (jlong) new JniUserModel(env);
-}
-
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_initNative(JNIEnv* env, jobject thiz, jlong ptr) {
-    ((JniUserModel*)ptr)->initJavaObj(env, thiz);
+JNIEXPORT jlong JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createNative(JNIEnv* env, jobject thiz) {
+    return (jlong) new JniUserModel(env, thiz);
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_deleteNative(JNIEnv*, jclass, jlong ptr) {
@@ -141,17 +129,15 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_loadPoseNative(
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
 }
 
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_loadExpressionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jstring name) {
-    const char* n = env->GetStringUTFChars(name, nullptr);
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_startMotionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jint priority) {
     jsize len = env->GetArrayLength(buffer);
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
-    ((JniUserModel*)ptr)->loadExpressionCopy((const csmByte*)data, len, n);
+    ((JniUserModel*)ptr)->startMotionCopy((const csmByte*)data, len, priority);
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
-    env->ReleaseStringUTFChars(name, n);
 }
 
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createRendererNative(JNIEnv*, jclass, jlong ptr) {
-    ((JniUserModel*)ptr)->CreateRenderer();
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_updateNative(JNIEnv*, jclass, jlong ptr, jfloat dt) {
+    ((JniUserModel*)ptr)->update(dt);
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_registerTextureNative(JNIEnv*, jclass, jlong ptr, jint index, jint textureId) {
@@ -159,26 +145,11 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_registerTexture
     if (r) r->BindTexture(index, (GLuint)textureId);
 }
 
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setDraggingNative(JNIEnv*, jclass, jlong ptr, jfloat x, jfloat y) {
-    ((JniUserModel*)ptr)->SetDragging(x, y);
-}
-
 JNIEXPORT jboolean JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_isHitNative(JNIEnv* env, jclass, jlong ptr, jstring id, jfloat x, jfloat y) {
     const char* s = env->GetStringUTFChars(id, nullptr);
     bool hit = ((JniUserModel*)ptr)->isHitTransformed(s, x, y);
     env->ReleaseStringUTFChars(id, s);
     return hit;
-}
-
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_startMotionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jint priority) {
-    jsize len = env->GetArrayLength(buffer);
-    jbyte* data = env->GetByteArrayElements(buffer, nullptr);
-    ((JniUserModel*)ptr)->startMotion((const csmByte*)data, len, priority);
-    env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
-}
-
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_updateNative(JNIEnv*, jclass, jlong ptr, jfloat dt) {
-    ((JniUserModel*)ptr)->update(dt);
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setParameterValueNative(JNIEnv* env, jclass, jlong ptr, jstring id, jfloat value) {

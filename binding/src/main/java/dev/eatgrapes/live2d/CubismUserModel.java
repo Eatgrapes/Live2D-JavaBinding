@@ -6,12 +6,21 @@ public class CubismUserModel extends Native {
     private Consumer<String> motionFinishedCallback;
 
     public CubismUserModel() {
-        super(createNative());
-        initNative(_ptr);
+        super(0); // Temporary call to super
+        this.initPtr();
     }
 
-    private static native long createNative();
-    private native void initNative(long ptr);
+    private void initPtr() {
+        try {
+            java.lang.reflect.Field field = Native.class.getDeclaredField("_ptr");
+            field.setAccessible(true);
+            field.set(this, createNative());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private native long createNative();
 
     public void loadModel(byte[] buffer) { loadModelNative(_ptr, buffer); }
     private static native void loadModelNative(long ptr, byte[] buffer);
