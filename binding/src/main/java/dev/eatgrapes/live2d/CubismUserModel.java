@@ -49,6 +49,9 @@ public class CubismUserModel extends Native {
         }
     }
 
+    public boolean isMotionFinished() { return isMotionFinishedNative(_ptr); }
+    private static native boolean isMotionFinishedNative(long ptr);
+
     public void update(float deltaTime) { updateNative(_ptr, deltaTime); }
     private static native void updateNative(long ptr, float deltaTime);
 

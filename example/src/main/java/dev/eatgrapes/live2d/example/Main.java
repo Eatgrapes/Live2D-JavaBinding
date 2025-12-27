@@ -89,9 +89,6 @@ public class Main {
 
         motions.put("idle", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
         motions.put("m04", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
-
-        // Start background idle loop once at priority 1
-        model.startMotion(motions.get("idle"), 1, true, null);
     }
 
     private void loop() {
@@ -105,6 +102,11 @@ public class Main {
                 float aspect = (float) w.get(0) / h.get(0);
                 for (int i = 0; i < 16; i++) mvp[i] = 0;
                 mvp[0] = 1.0f / aspect; mvp[5] = 1.0f; mvp[10] = 1.0f; mvp[15] = 1.0f;
+            }
+
+            // Standard state machine: if nothing is playing, play idle
+            if (model.isMotionFinished()) {
+                model.startMotion(motions.get("idle"), 1, false, null);
             }
 
             model.update(0.016f);

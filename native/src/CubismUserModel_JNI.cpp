@@ -70,6 +70,7 @@ public:
     void update(float dt) {
         if (!_model) return;
 
+        // Cleanup finished motions safely
         {
             std::lock_guard<std::mutex> lock(_pendingMutex);
             for (auto* m : _pendingDeletion) {
@@ -83,7 +84,13 @@ public:
         }
 
         _model->LoadParameters();
-        _motionManager->UpdateMotion(_model, dt);
+        
+        // Update motion and check if we are idle
+        bool isMotionPlaying = !_motionManager->IsFinished();
+        if (isMotionPlaying) {
+            _motionManager->UpdateMotion(_model, dt);
+        }
+        
         _model->SaveParameters();
 
         if (_pose) _pose->UpdateParameters(_model, dt);
@@ -99,6 +106,10 @@ public:
 
         if (_physics) _physics->Evaluate(_model, dt);
         _model->Update();
+    }
+
+    bool isMotionFinished() {
+        return _motionManager->IsFinished();
     }
 
     void notifyFinished() {
@@ -203,6 +214,10 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_startMotionNati
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
     ((JniUserModel*)ptr)->startMotionCopy((const csmByte*)data, len, priority, loop);
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_isMotionFinishedNative(JNIEnv*, jclass, jlong ptr) {
+    return ((JniUserModel*)ptr)->isMotionFinished();
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_updateNative(JNIEnv*, jclass, jlong ptr, jfloat dt) {
