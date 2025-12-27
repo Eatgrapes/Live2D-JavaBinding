@@ -7,9 +7,11 @@ public class CubismUserModel extends Native {
 
     public CubismUserModel() {
         super(createNative());
+        initNative(_ptr);
     }
 
     private static native long createNative();
+    private native void initNative(long ptr);
 
     public void loadModel(byte[] buffer) { loadModelNative(_ptr, buffer); }
     private static native void loadModelNative(long ptr, byte[] buffer);
