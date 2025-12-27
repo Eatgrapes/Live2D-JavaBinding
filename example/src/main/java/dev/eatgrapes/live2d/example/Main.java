@@ -8,6 +8,7 @@ import org.lwjgl.system.MemoryStack;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,54 +20,67 @@ import static org.lwjgl.opengl.GL11.*;
 public class Main {
     private long window;
     private CubismUserModel model;
-    private final float[] mvpMatrix = new float[]{
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f
+    private final float[] mvp = new float[]{
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
     };
 
     public void run() throws Exception {
-        initWindow();
-        initLive2D();
+        init();
+        setup();
         loop();
         cleanup();
     }
 
-    private void initWindow() {
-        if (!glfwInit()) throw new IllegalStateException("GLFW init failed");
-        window = glfwCreateWindow(800, 800, "Live2D Example", 0, 0);
+    private void init() {
+        if (!glfwInit()) throw new RuntimeException("GLFW failed");
+        window = glfwCreateWindow(800, 800, "Live2D Interaction", 0, 0);
         glfwMakeContextCurrent(window);
         GL.createCapabilities();
         glfwSwapInterval(1);
+
+        glfwSetCursorPosCallback(window, (win, x, y) -> {
+            float nx = (float) (x / 400.0 - 1.0);
+            float ny = (float) (1.0 - y / 400.0);
+            if (model != null) model.setDragging(nx, ny);
+        });
+
+        glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
+            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+                try (MemoryStack stack = MemoryStack.stackPush()) {
+                    DoubleBuffer x = stack.mallocDouble(1), y = stack.mallocDouble(1);
+                    glfwGetCursorPos(window, x, y);
+                    float nx = (float) (x.get(0) / 400.0 - 1.0);
+                    float ny = (float) (1.0 - y.get(0) / 400.0);
+                    
+                    if (model.isHit("HitArea", nx, ny)) {
+                        System.out.println("Hit!");
+                        byte[] motion = load("/model/Hiyori/motions/Hiyori_m01.motion3.json");
+                        model.startMotion(motion, 2, name -> System.out.println("Motion finished: " + name));
+                    }
+                } catch (Exception e) { e.printStackTrace(); }
+            }
+        });
     }
 
-    private void initLive2D() throws Exception {
+    private void setup() throws Exception {
         CubismFramework.startUp();
         CubismFramework.initialize();
 
         model = new CubismUserModel();
-        model.loadModel(loadResource("/model/Hiyori/Hiyori.moc3"));
-        model.loadPose(loadResource("/model/Hiyori/Hiyori.pose3.json"));
-        model.loadPhysics(loadResource("/model/Hiyori/Hiyori.physics3.json"));
+        model.loadModel(load("/model/Hiyori/Hiyori.moc3"));
+        model.loadPose(load("/model/Hiyori/Hiyori.pose3.json"));
+        model.loadPhysics(load("/model/Hiyori/Hiyori.physics3.json"));
         model.createRenderer();
 
-        model.registerTexture(0, loadTexture("/model/Hiyori/Hiyori.2048/texture_00.png"));
-        model.registerTexture(1, loadTexture("/model/Hiyori/Hiyori.2048/texture_01.png"));
+        model.registerTexture(0, loadTex("/model/Hiyori/Hiyori.2048/texture_00.png"));
+        model.registerTexture(1, loadTex("/model/Hiyori/Hiyori.2048/texture_01.png"));
     }
 
     private void loop() {
-        long startTime = System.currentTimeMillis();
         while (!glfwWindowShouldClose(window)) {
-            glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            float time = (System.currentTimeMillis() - startTime) / 1000.0f;
-            model.setParameterValue("ParamAngleX", (float) Math.sin(time) * 30.0f);
-
             model.update(0.016f);
-            model.draw(mvpMatrix);
-
+            model.draw(mvp);
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
@@ -78,34 +92,27 @@ public class Main {
         glfwTerminate();
     }
 
-    private byte[] loadResource(String path) throws Exception {
-        try (InputStream is = getClass().getResourceAsStream(path)) {
-            return is.readAllBytes();
-        }
+    private byte[] load(String p) throws Exception {
+        try (InputStream is = getClass().getResourceAsStream(p)) { return is.readAllBytes(); }
     }
 
-    private int loadTexture(String path) throws Exception {
-        Path temp = Files.createTempFile("l2d", ".png");
-        try (InputStream is = getClass().getResourceAsStream(path)) {
-            Files.copy(is, temp, StandardCopyOption.REPLACE_EXISTING);
-        }
+    private int loadTex(String p) throws Exception {
+        Path tmp = Files.createTempFile("l2d", ".png");
+        try (InputStream is = getClass().getResourceAsStream(p)) { Files.copy(is, tmp, StandardCopyOption.REPLACE_EXISTING); }
         int w, h, tex;
         ByteBuffer img;
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer wb = stack.mallocInt(1), hb = stack.mallocInt(1), cb = stack.mallocInt(1);
-            img = STBImage.stbi_load(temp.toString(), wb, hb, cb, 4);
+        try (MemoryStack s = MemoryStack.stackPush()) {
+            IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1), cb = s.mallocInt(1);
+            img = STBImage.stbi_load(tmp.toString(), wb, hb, cb, 4);
             w = wb.get(); h = hb.get();
         }
         tex = glGenTextures();
         glBindTexture(GL_TEXTURE_2D, tex);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
         STBImage.stbi_image_free(img);
-        Files.delete(temp);
+        Files.delete(tmp);
         return tex;
     }
 
-    public static void main(String[] args) throws Exception {
-        new Main().run();
-    }
+    public static void main(String[] args) throws Exception { new Main().run(); }
 }
