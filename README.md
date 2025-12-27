@@ -3,7 +3,7 @@
 A Native Java binding for the Live2D Cubism SDK.
 
 > **Status: Work in Progress**  
-> This project is currently under development. Only basic model display and idle motion updates are implemented.
+> This project is currently under development.
 
 ## Features
 
@@ -57,7 +57,7 @@ The artifacts will be generated in the `out/` directory:
 
 ## Contributing
 
-Pull Requests (PRs) are welcome! If you'd like to help implement motion managers, expression support, or other features, feel free to contribute.
+Pull Requests (PRs) are welcome! If you'd like to help implement other features, feel free to contribute.
 
 ## License
 
