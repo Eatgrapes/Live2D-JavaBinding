@@ -1,0 +1,18 @@
+# Build outputs
+out/
+native/build/
+*.jar
+target/
+**/target/
+*.log
+
+# SDK
+/sdk/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Python
+__pycache__/

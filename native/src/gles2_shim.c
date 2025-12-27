@@ -1,0 +1,135 @@
+#ifdef _WIN32
+#include <windows.h>
+#include <GL/gl.h>
+#include <stddef.h>
+
+typedef float GLfloat;
+typedef signed char GLbyte;
+typedef unsigned int GLenum;
+typedef unsigned int GLuint;
+typedef int GLint;
+typedef int GLsizei;
+typedef unsigned int GLbitfield;
+typedef double GLclampd;
+typedef float GLclampf;
+typedef unsigned char GLubyte;
+typedef unsigned char GLboolean;
+typedef char GLchar;
+typedef ptrdiff_t GLintptr;
+typedef ptrdiff_t GLsizeiptr;
+
+#define GL_FRAGMENT_SHADER 0x8B30
+#define GL_VERTEX_SHADER 0x8B31
+#define GL_FRAMEBUFFER 0x8D40
+#define GL_COLOR_ATTACHMENT0 0x8CE0
+#define GL_TEXTURE0 0x84C0
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+
+typedef void (APIENTRY* PFNGLGENFRAMEBUFFERSPROC)(GLsizei, GLuint*);
+typedef void (APIENTRY* PFNGLBINDFRAMEBUFFERPROC)(GLenum, GLuint);
+typedef void (APIENTRY* PFNGLFRAMEBUFFERTEXTURE2DPROC)(GLenum, GLenum, GLenum, GLuint, GLint);
+typedef void (APIENTRY* PFNGLDELETEFRAMEBUFFERSPROC)(GLsizei, const GLuint*);
+typedef GLenum (APIENTRY* PFNGLCHECKFRAMEBUFFERSTATUSPROC)(GLenum);
+typedef void (APIENTRY* PFNGLACTIVETEXTUREPROC)(GLenum);
+typedef void (APIENTRY* PFNGLBLENDFUNCSEPARATEPROC)(GLenum, GLenum, GLenum, GLenum);
+typedef GLuint (APIENTRY* PFNGLCREATESHADERPROC)(GLenum);
+typedef void (APIENTRY* PFNGLSHADERSOURCEPROC)(GLuint, GLsizei, const GLchar* const*, const GLint*);
+typedef void (APIENTRY* PFNGLCOMPILESHADERPROC)(GLuint);
+typedef void (APIENTRY* PFNGLGETSHADERIVPROC)(GLuint, GLenum, GLint*);
+typedef void (APIENTRY* PFNGLGETSHADERINFOLOGPROC)(GLuint, GLsizei, GLsizei*, GLchar*);
+typedef void (APIENTRY* PFNGLDELETESHADERPROC)(GLuint);
+typedef GLuint (APIENTRY* PFNGLCREATEPROGRAMPROC)(void);
+typedef void (APIENTRY* PFNGLATTACHSHADERPROC)(GLuint, GLuint);
+typedef void (APIENTRY* PFNGLDETACHSHADERPROC)(GLuint, GLuint);
+typedef void (APIENTRY* PFNGLLINKPROGRAMPROC)(GLuint);
+typedef void (APIENTRY* PFNGLGETPROGRAMIVPROC)(GLuint, GLenum, GLint*);
+typedef void (APIENTRY* PFNGLGETPROGRAMINFOLOGPROC)(GLuint, GLsizei, GLsizei*, GLchar*);
+typedef void (APIENTRY* PFNGLUSEPROGRAMPROC)(GLuint);
+typedef void (APIENTRY* PFNGLDELETEPROGRAMPROC)(GLuint);
+typedef GLint (APIENTRY* PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar*);
+typedef GLint (APIENTRY* PFNGLGETUNIFORMLOCATIONPROC)(GLuint, const GLchar*);
+typedef void (APIENTRY* PFNGLUNIFORM1IPROC)(GLint, GLint);
+typedef void (APIENTRY* PFNGLUNIFORMMATRIX4FVPROC)(GLint, GLsizei, GLboolean, const GLfloat*);
+typedef void (APIENTRY* PFNGLUNIFORM4FPROC)(GLint, GLfloat, GLfloat, GLfloat, GLfloat);
+typedef void (APIENTRY* PFNGLENABLEVERTEXATTRIBARRAYPROC)(GLuint);
+typedef void (APIENTRY* PFNGLVERTEXATTRIBPOINTERPROC)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
+typedef void (APIENTRY* PFNGLDISABLEVERTEXATTRIBARRAYPROC)(GLuint);
+typedef void (APIENTRY* PFNGLGETVERTEXATTRIBIVPROC)(GLuint, GLenum, GLint*);
+typedef void (APIENTRY* PFNGLVALIDATEPROGRAMPROC)(GLuint);
+typedef void (APIENTRY* PFNGLBINDBUFFERPROC)(GLenum, GLuint);
+
+#define GET_PROC(name, type) name = (type)wglGetProcAddress(#name); if (!name) name = (type)GetProcAddress(hLib, #name);
+
+PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers;
+PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer;
+PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D;
+PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers;
+PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus;
+PFNGLACTIVETEXTUREPROC glActiveTexture;
+PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
+PFNGLCREATESHADERPROC glCreateShader;
+PFNGLSHADERSOURCEPROC glShaderSource;
+PFNGLCOMPILESHADERPROC glCompileShader;
+PFNGLGETSHADERIVPROC glGetShaderiv;
+PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
+PFNGLDELETESHADERPROC glDeleteShader;
+PFNGLCREATEPROGRAMPROC glCreateProgram;
+PFNGLATTACHSHADERPROC glAttachShader;
+PFNGLDETACHSHADERPROC glDetachShader;
+PFNGLLINKPROGRAMPROC glLinkProgram;
+PFNGLGETPROGRAMIVPROC glGetProgramiv;
+PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
+PFNGLUSEPROGRAMPROC glUseProgram;
+PFNGLDELETEPROGRAMPROC glDeleteProgram;
+PFNGLGETATTRIBLOCATIONPROC glGetAttribLocation;
+PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
+PFNGLUNIFORM1IPROC glUniform1i;
+PFNGLUNIFORMMATRIX4FVPROC glUniformMatrix4fv;
+PFNGLUNIFORM4FPROC glUniform4f;
+PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
+PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
+PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray;
+PFNGLGETVERTEXATTRIBIVPROC glGetVertexAttribiv;
+PFNGLVALIDATEPROGRAMPROC glValidateProgram;
+PFNGLBINDBUFFERPROC glBindBuffer;
+
+void init_gles2_shim() {
+    static int initialized = 0;
+    if (initialized) return;
+    HMODULE hLib = GetModuleHandleA("opengl32.dll");
+    GET_PROC(glGenFramebuffers, PFNGLGENFRAMEBUFFERSPROC);
+    GET_PROC(glBindFramebuffer, PFNGLBINDFRAMEBUFFERPROC);
+    GET_PROC(glFramebufferTexture2D, PFNGLFRAMEBUFFERTEXTURE2DPROC);
+    GET_PROC(glDeleteFramebuffers, PFNGLDELETEFRAMEBUFFERSPROC);
+    GET_PROC(glCheckFramebufferStatus, PFNGLCHECKFRAMEBUFFERSTATUSPROC);
+    GET_PROC(glActiveTexture, PFNGLACTIVETEXTUREPROC);
+    GET_PROC(glBlendFuncSeparate, PFNGLBLENDFUNCSEPARATEPROC);
+    GET_PROC(glCreateShader, PFNGLCREATESHADERPROC);
+    GET_PROC(glShaderSource, PFNGLSHADERSOURCEPROC);
+    GET_PROC(glCompileShader, PFNGLCOMPILESHADERPROC);
+    GET_PROC(glGetShaderiv, PFNGLGETSHADERIVPROC);
+    GET_PROC(glGetShaderInfoLog, PFNGLGETSHADERINFOLOGPROC);
+    GET_PROC(glDeleteShader, PFNGLDELETESHADERPROC);
+    GET_PROC(glCreateProgram, PFNGLCREATEPROGRAMPROC);
+    GET_PROC(glAttachShader, PFNGLATTACHSHADERPROC);
+    GET_PROC(glDetachShader, PFNGLDETACHSHADERPROC);
+    GET_PROC(glLinkProgram, PFNGLLINKPROGRAMPROC);
+    GET_PROC(glGetProgramiv, PFNGLGETPROGRAMIVPROC);
+    GET_PROC(glGetProgramInfoLog, PFNGLGETPROGRAMINFOLOGPROC);
+    GET_PROC(glUseProgram, PFNGLUSEPROGRAMPROC);
+    GET_PROC(glDeleteProgram, PFNGLDELETEPROGRAMPROC);
+    GET_PROC(glGetAttribLocation, PFNGLGETATTRIBLOCATIONPROC);
+    GET_PROC(glGetUniformLocation, PFNGLGETUNIFORMLOCATIONPROC);
+    GET_PROC(glUniform1i, PFNGLUNIFORM1IPROC);
+    GET_PROC(glUniformMatrix4fv, PFNGLUNIFORMMATRIX4FVPROC);
+    GET_PROC(glUniform4f, PFNGLUNIFORM4FPROC);
+    GET_PROC(glEnableVertexAttribArray, PFNGLENABLEVERTEXATTRIBARRAYPROC);
+    GET_PROC(glVertexAttribPointer, PFNGLVERTEXATTRIBPOINTERPROC);
+    GET_PROC(glDisableVertexAttribArray, PFNGLDISABLEVERTEXATTRIBARRAYPROC);
+    GET_PROC(glGetVertexAttribiv, PFNGLGETVERTEXATTRIBIVPROC);
+    GET_PROC(glValidateProgram, PFNGLVALIDATEPROGRAMPROC);
+    GET_PROC(glBindBuffer, PFNGLBINDBUFFERPROC);
+    initialized = 1;
+}
+#endif
