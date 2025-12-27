@@ -9,7 +9,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Use native ARM64 runners for Linux and macOS
+        os: [ubuntu-latest, windows-latest, macos-latest, ubuntu-24.04-arm]
 
     steps:
       - uses: actions/checkout@v4
@@ -26,26 +27,14 @@ jobs:
           python-version: '3.x'
 
       - name: Install Dependencies (Linux)
-        if: runner.os == 'Linux'
+        if: contains(matrix.os, 'ubuntu')
         run: sudo apt-get update && sudo apt-get install -y libgles2-mesa-dev
 
       - name: Build and Package
         run: python3 scripts/build.py
 
-      # For Linux ARM64, we use QEMU to run the build in an emulated environment
-      - name: Build Linux ARM64
-        if: runner.os == 'Linux'
-        uses: uraimo/run-on-arch-action@v2
-        with:
-          arch: aarch64
-          distro: ubuntu22.04
-          install: |
-            apt-get update && apt-get install -y python3 cmake build-essential openjdk-21-jdk libgles2-mesa-dev
-          run: |
-            python3 scripts/build.py
-
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: live2d-jars-${{ runner.os }}
+          name: live2d-jars-${{ matrix.os }}
           path: out/*.jar
