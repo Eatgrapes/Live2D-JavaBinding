@@ -57,7 +57,7 @@ def get_tag():
     p = "macos" if "darwin" in os_name else os_name
     
     if "arm" in arch or "aarch64" in arch:
-        a = "arm" if p == "linux" else "arm64"
+        a = "arm64"
     else:
         a = "x64"
     return f"{p}-{a}"
