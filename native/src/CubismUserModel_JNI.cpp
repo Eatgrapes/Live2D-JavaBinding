@@ -5,7 +5,7 @@
 #include <Motion/CubismMotion.hpp>
 #include <vector>
 #include <string>
-#include <iostream>
+#include <map>
 
 using namespace Live2D::Cubism::Framework;
 using namespace Live2D::Cubism::Framework::Rendering;
@@ -20,6 +20,7 @@ public:
     ~JniUserModel() {
         JNIEnv* env = getEnv();
         if (env) env->DeleteGlobalRef(_javaObj);
+        for (auto& pair : _expressionData) pair.second.clear();
     }
 
     void loadModelCopy(const csmByte* buffer, csmSizeInt size) {
@@ -34,19 +35,23 @@ public:
 
     void loadPoseCopy(const csmByte* buffer, csmSizeInt size) {
         _poseData.assign(buffer, buffer + size);
-        LoadPose(_poseData.data(), (csmSizeInt)_physicsData.size());
+        LoadPose(_poseData.data(), (csmSizeInt)_poseData.size());
+    }
+
+    void loadExpressionCopy(const csmByte* buffer, csmSizeInt size, const std::string& name) {
+        auto& vec = _expressionData[name];
+        vec.assign(buffer, buffer + size);
+        LoadExpression(vec.data(), (csmSizeInt)vec.size(), name.c_str());
     }
 
     void startMotion(const csmByte* buffer, csmSizeInt size, int priority) {
         auto* motion = CubismMotion::Create(buffer, size);
         if (!motion) return;
-
         motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self) {
-            auto* model = static_cast<JniUserModel*>(self->GetFinishedMotionCustomData());
-            model->notifyFinished();
+            auto* m = static_cast<JniUserModel*>(self->GetFinishedMotionCustomData());
+            m->notifyFinished();
             CubismMotion::Delete(static_cast<CubismMotion*>(self));
         }, this);
-
         _motionManager->StartMotionPriority(motion, true, priority);
     }
 
@@ -60,13 +65,18 @@ public:
         env->DeleteLocalRef(name);
     }
 
+    bool isHitTransformed(const char* id, float x, float y) {
+        if (!_model) return false;
+        float mx = _modelMatrix->InvertTransformX(x);
+        float my = _modelMatrix->InvertTransformY(y);
+        return IsHit(CubismFramework::GetIdManager()->GetId(id), mx, my);
+    }
+
     void update(float dt) {
         if (!_model) return;
 
         _model->LoadParameters();
-        if (!_motionManager->IsFinished()) {
-            _motionManager->UpdateMotion(_model, dt);
-        }
+        if (!_motionManager->IsFinished()) _motionManager->UpdateMotion(_model, dt);
         _model->SaveParameters();
 
         if (_pose) _pose->UpdateParameters(_model, dt);
@@ -76,7 +86,6 @@ public:
             auto* idm = CubismFramework::GetIdManager();
             _model->AddParameterValue(idm->GetId("ParamAngleX"), _dragManager->GetX() * 30.0f);
             _model->AddParameterValue(idm->GetId("ParamAngleY"), _dragManager->GetY() * 30.0f);
-            _model->AddParameterValue(idm->GetId("ParamBodyAngleX"), _dragManager->GetX() * 10.0f);
             _model->AddParameterValue(idm->GetId("ParamEyeBallX"), _dragManager->GetX());
             _model->AddParameterValue(idm->GetId("ParamEyeBallY"), _dragManager->GetY());
         }
@@ -88,17 +97,14 @@ public:
 private:
     JNIEnv* getEnv() {
         JNIEnv* env;
-        if (_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
-            _jvm->AttachCurrentThread((void**)&env, nullptr);
-        }
+        if (_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) _jvm->AttachCurrentThread((void**)&env, nullptr);
         return env;
     }
 
     JavaVM* _jvm;
     jobject _javaObj;
-    std::vector<csmByte> _mocData;
-    std::vector<csmByte> _physicsData;
-    std::vector<csmByte> _poseData;
+    std::vector<csmByte> _mocData, _physicsData, _poseData;
+    std::map<std::string, std::vector<csmByte>> _expressionData;
 };
 
 extern "C" {
@@ -133,12 +139,12 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_loadPoseNative(
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_loadExpressionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jstring name) {
+    const char* n = env->GetStringUTFChars(name, nullptr);
     jsize len = env->GetArrayLength(buffer);
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
-    const char* n = env->GetStringUTFChars(name, nullptr);
-    ((JniUserModel*)ptr)->LoadExpression((const csmByte*)data, len, n);
-    env->ReleaseStringUTFChars(name, n);
+    ((JniUserModel*)ptr)->loadExpressionCopy((const csmByte*)data, len, n);
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+    env->ReleaseStringUTFChars(name, n);
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createRendererNative(JNIEnv*, jclass, jlong ptr) {
@@ -146,8 +152,8 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createRendererN
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_registerTextureNative(JNIEnv*, jclass, jlong ptr, jint index, jint textureId) {
-    auto* renderer = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
-    if (renderer) renderer->BindTexture(index, (GLuint)textureId);
+    auto* r = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
+    if (r) r->BindTexture(index, (GLuint)textureId);
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setDraggingNative(JNIEnv*, jclass, jlong ptr, jfloat x, jfloat y) {
@@ -156,7 +162,7 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setDraggingNati
 
 JNIEXPORT jboolean JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_isHitNative(JNIEnv* env, jclass, jlong ptr, jstring id, jfloat x, jfloat y) {
     const char* s = env->GetStringUTFChars(id, nullptr);
-    bool hit = ((JniUserModel*)ptr)->IsHit(CubismFramework::GetIdManager()->GetId(s), x, y);
+    bool hit = ((JniUserModel*)ptr)->isHitTransformed(s, x, y);
     env->ReleaseStringUTFChars(id, s);
     return hit;
 }
@@ -189,23 +195,20 @@ JNIEXPORT jfloat JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getCanvasHeig
 JNIEXPORT jobjectArray JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getDrawableIdsNative(JNIEnv* env, jclass, jlong ptr) {
     auto* model = ((JniUserModel*)ptr)->GetModel();
     int count = model->GetDrawableCount();
-    jclass strCls = env->FindClass("java/lang/String");
-    jobjectArray res = env->NewObjectArray(count, strCls, nullptr);
+    jobjectArray res = env->NewObjectArray(count, env->FindClass("java/lang/String"), nullptr);
     for (int i = 0; i < count; i++) {
-        env->SetObjectArrayElement(res, i, env->NewStringUTF(model->GetDrawableId(i)->GetString().GetRawString()));
+        jstring s = env->NewStringUTF(model->GetDrawableId(i)->GetString().GetRawString());
+        env->SetObjectArrayElement(res, i, s);
+        env->DeleteLocalRef(s);
     }
     return res;
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_drawNative(JNIEnv* env, jclass, jlong ptr, jfloatArray matrix) {
     jfloat* m_ptr = env->GetFloatArrayElements(matrix, nullptr);
-    CubismMatrix44 m;
-    m.SetMatrix(m_ptr);
-    auto* renderer = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
-    if (renderer) {
-        renderer->SetMvpMatrix(&m);
-        renderer->DrawModel();
-    }
+    CubismMatrix44 m; m.SetMatrix(m_ptr);
+    auto* r = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
+    if (r) { r->SetMvpMatrix(&m); r->DrawModel(); }
     env->ReleaseFloatArrayElements(matrix, m_ptr, JNI_ABORT);
 }
 

@@ -13,6 +13,8 @@ import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -21,9 +23,8 @@ import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 public class Main {
     private long window;
     private CubismUserModel model;
-    private final float[] mvp = new float[]{
-        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
-    };
+    private final Map<String, byte[]> motionCache = new HashMap<>();
+    private final float[] mvp = new float[]{1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
 
     public void run() throws Exception {
         init();
@@ -38,15 +39,13 @@ public class Main {
         glfwMakeContextCurrent(window);
         GL.createCapabilities();
         glfwSwapInterval(1);
-
-        // Required for Live2D transparency and masking
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         glfwSetCursorPosCallback(window, (win, x, y) -> {
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                IntBuffer wb = stack.mallocInt(1), hb = stack.mallocInt(1);
-                glfwGetWindowSize(window, wb, hb);
+            try (MemoryStack s = MemoryStack.stackPush()) {
+                IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1);
+                glfwGetWindowSize(win, wb, hb);
                 float nx = (float) (x / (wb.get(0) / 2.0) - 1.0);
                 float ny = (float) (1.0 - y / (hb.get(0) / 2.0));
                 if (model != null) model.setDragging(nx, ny);
@@ -55,21 +54,21 @@ public class Main {
 
         glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
             if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-                try (MemoryStack stack = MemoryStack.stackPush()) {
-                    DoubleBuffer xb = stack.mallocDouble(1), yb = stack.mallocDouble(1);
-                    IntBuffer wb = stack.mallocInt(1), hb = stack.mallocInt(1);
-                    glfwGetCursorPos(window, xb, yb);
-                    glfwGetWindowSize(window, wb, hb);
-                    
+                try (MemoryStack s = MemoryStack.stackPush()) {
+                    DoubleBuffer xb = s.mallocDouble(1), yb = s.mallocDouble(1);
+                    IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1);
+                    glfwGetCursorPos(win, xb, yb);
+                    glfwGetWindowSize(win, wb, hb);
                     float nx = (float) (xb.get(0) / (wb.get(0) / 2.0) - 1.0);
                     float ny = (float) (1.0 - yb.get(0) / (hb.get(0) / 2.0));
                     
-                    if (model.isHit("HitArea", nx, ny)) {
-                        System.out.println("Hit Body!");
-                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m04.motion3.json"), 2, null);
-                    } else if (model.isHit("ArtMesh12", nx, ny) || model.isHit("ArtMesh01", nx, ny)) {
-                        System.out.println("Hit Head/Face!");
-                        model.startMotion(load("/model/Hiyori/motions/Hiyori_m01.motion3.json"), 2, null);
+                    // Check Head first
+                    if (model.isHit("ArtMesh12", nx, ny)) {
+                        System.out.println("Head!");
+                        model.startMotion(motionCache.get("m01"), 3, null);
+                    } else if (model.isHit("HitArea", nx, ny)) {
+                        System.out.println("Body!");
+                        model.startMotion(motionCache.get("m04"), 3, null);
                     }
                 } catch (Exception e) { e.printStackTrace(); }
             }
@@ -86,25 +85,21 @@ public class Main {
         model.loadPhysics(load("/model/Hiyori/Hiyori.physics3.json"));
         model.createRenderer();
 
-        System.out.println("Drawable IDs:");
-        for (String id : model.getDrawableIds()) {
-            System.out.println("  " + id);
-        }
-
         model.registerTexture(0, loadTex("/model/Hiyori/Hiyori.2048/texture_00.png"));
         model.registerTexture(1, loadTex("/model/Hiyori/Hiyori.2048/texture_01.png"));
+
+        motionCache.put("m01", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
+        motionCache.put("m04", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
     }
 
     private void loop() {
         while (!glfwWindowShouldClose(window)) {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                IntBuffer w = stack.mallocInt(1), h = stack.mallocInt(1);
+            try (MemoryStack s = MemoryStack.stackPush()) {
+                IntBuffer w = s.mallocInt(1), h = s.mallocInt(1);
                 glfwGetWindowSize(window, w, h);
                 glViewport(0, 0, w.get(0), h.get(0));
             }
-
             model.update(0.016f);
             model.draw(mvp);
             glfwSwapBuffers(window);
