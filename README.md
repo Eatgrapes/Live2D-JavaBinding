@@ -3,7 +3,7 @@
 A Native Java binding for the Live2D Cubism SDK.
 
 > **Status: Work in Progress**  
-> This project is currently under development.
+> This project is currently under development. Basic model display, interaction, and remote control are implemented.
 
 ## Features
 
@@ -31,7 +31,13 @@ model.loadPhysics(physicsBytes);
 model.createRenderer();
 model.registerTexture(0, openGLTextureId);
 
-// 4. Update & Draw (in your render loop)
+// 4. Interaction & Motion
+model.setDragging(nx, ny); // Eye tracking
+model.startMotion(motionBytes, priority, loop, name -> {
+    System.out.println("Motion finished!");
+});
+
+// 5. Update & Draw (in your render loop)
 model.update(deltaTime);
 model.draw(mvpMatrix);
 ```
@@ -41,7 +47,7 @@ model.draw(mvpMatrix);
 - `binding/`: Java API and module definitions.
 - `native/`: JNI implementation and CMake build scripts.
 - `scripts/`: Python build automation for all platforms.
-- `example/`: A complete Maven-based example using LWJGL 3.
+- `example/`: A complete Maven-based example using LWJGL 3, including a Swing control panel.
 
 ## Building
 
@@ -57,7 +63,7 @@ The artifacts will be generated in the `out/` directory:
 
 ## Contributing
 
-Pull Requests (PRs) are welcome! If you'd like to help implement other features, feel free to contribute.
+Pull Requests (PRs) are welcome! Help us implement more SDK features or improve platform compatibility.
 
 ## License
 
