@@ -30,8 +30,8 @@ public:
         auto* motion = CubismMotion::Create(buffer, size);
         if (!motion) return;
 
-        motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self, void* data) {
-            auto* model = static_cast<JniUserModel*>(data);
+        motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self) {
+            auto* model = static_cast<JniUserModel*>(self->GetFinishedMotionCustomData());
             model->notifyFinished();
             CubismMotion::Delete(static_cast<CubismMotion*>(self));
         }, this);
