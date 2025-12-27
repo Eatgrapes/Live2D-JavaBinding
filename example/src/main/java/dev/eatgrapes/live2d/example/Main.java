@@ -23,7 +23,7 @@ import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 public class Main {
     private long window;
     private CubismUserModel model;
-    private final Map<String, byte[]> motionCache = new HashMap<>();
+    private final Map<String, byte[]> motions = new HashMap<>();
     private final float[] mvp = new float[]{1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
 
     public void run() throws Exception {
@@ -47,7 +47,6 @@ public class Main {
                 IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1);
                 glfwGetWindowSize(win, wb, hb);
                 float aspect = (float) wb.get(0) / hb.get(0);
-                // Map screen to NDC then to Model Space aspect
                 float nx = (float) (x / (wb.get(0) / 2.0) - 1.0) * aspect;
                 float ny = (float) (1.0 - y / (hb.get(0) / 2.0));
                 if (model != null) model.setDragging(nx, ny);
@@ -61,14 +60,14 @@ public class Main {
                     IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1);
                     glfwGetCursorPos(win, xb, yb);
                     glfwGetWindowSize(win, wb, hb);
-                    
                     float aspect = (float) wb.get(0) / hb.get(0);
                     float nx = (float) (xb.get(0) / (wb.get(0) / 2.0) - 1.0) * aspect;
                     float ny = (float) (1.0 - yb.get(0) / (hb.get(0) / 2.0));
                     
                     if (model.isHit("HitArea", nx, ny)) {
                         System.out.println("Hit Body!");
-                        model.startMotion(motionCache.get("m04"), 3, null);
+                        // Priority 3: Override the idle motion
+                        model.startMotion(motions.get("m04"), 3, false, null);
                     }
                 } catch (Exception e) { e.printStackTrace(); }
             }
@@ -88,8 +87,11 @@ public class Main {
         model.registerTexture(0, loadTex("/model/Hiyori/Hiyori.2048/texture_00.png"));
         model.registerTexture(1, loadTex("/model/Hiyori/Hiyori.2048/texture_01.png"));
 
-        motionCache.put("m01", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
-        motionCache.put("m04", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
+        motions.put("idle", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
+        motions.put("m04", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
+
+        // Start background idle loop once at priority 1
+        model.startMotion(motions.get("idle"), 1, true, null);
     }
 
     private void loop() {
@@ -100,14 +102,9 @@ public class Main {
                 IntBuffer w = s.mallocInt(1), h = s.mallocInt(1);
                 glfwGetWindowSize(window, w, h);
                 glViewport(0, 0, w.get(0), h.get(0));
-                
                 float aspect = (float) w.get(0) / h.get(0);
-                // Simple ortho projection to maintain aspect ratio
                 for (int i = 0; i < 16; i++) mvp[i] = 0;
-                mvp[0] = 1.0f / aspect;
-                mvp[5] = 1.0f;
-                mvp[10] = 1.0f;
-                mvp[15] = 1.0f;
+                mvp[0] = 1.0f / aspect; mvp[5] = 1.0f; mvp[10] = 1.0f; mvp[15] = 1.0f;
             }
 
             model.update(0.016f);

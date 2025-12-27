@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <mutex>
+#include <algorithm>
 
 using namespace Live2D::Cubism::Framework;
 using namespace Live2D::Cubism::Framework::Rendering;
@@ -42,39 +43,51 @@ public:
         LoadPose(_poseBuffer.data(), (csmSizeInt)_poseBuffer.size());
     }
 
-    void startMotionCopy(const csmByte* buffer, csmSizeInt size, int priority) {
+    void startMotionCopy(const csmByte* buffer, csmSizeInt size, int priority, bool loop) {
         std::vector<csmByte> motionBuf(buffer, buffer + size);
         auto* motion = CubismMotion::Create(motionBuf.data(), (csmSizeInt)motionBuf.size());
         if (!motion) return;
+
+        motion->SetLoop(loop);
         _motionBuffers[motion] = std::move(motionBuf);
+        
         motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self) {
             auto* m = static_cast<CubismMotion*>(self);
             auto* model = static_cast<JniUserModel*>(m->GetFinishedMotionCustomData());
             model->queueFinishedMotion(m);
         }, this);
-        _motionManager->StartMotionPriority(motion, true, priority);
+
+        _motionManager->StartMotionPriority(motion, false, priority);
     }
 
     void queueFinishedMotion(CubismMotion* motion) {
         std::lock_guard<std::mutex> lock(_pendingMutex);
-        _pendingDeletion.push_back(motion);
+        if (std::find(_pendingDeletion.begin(), _pendingDeletion.end(), motion) == _pendingDeletion.end()) {
+            _pendingDeletion.push_back(motion);
+        }
     }
 
     void update(float dt) {
         if (!_model) return;
+
         {
             std::lock_guard<std::mutex> lock(_pendingMutex);
             for (auto* m : _pendingDeletion) {
-                _motionBuffers.erase(m);
-                CubismMotion::Delete(m);
-                notifyFinished();
+                if (_motionBuffers.count(m)) {
+                    _motionBuffers.erase(m);
+                    CubismMotion::Delete(m);
+                    notifyFinished();
+                }
             }
             _pendingDeletion.clear();
         }
+
         _model->LoadParameters();
         _motionManager->UpdateMotion(_model, dt);
         _model->SaveParameters();
+
         if (_pose) _pose->UpdateParameters(_model, dt);
+        
         if (_dragManager) {
             _dragManager->Update(dt);
             auto* idm = CubismFramework::GetIdManager();
@@ -83,6 +96,7 @@ public:
             _model->AddParameterValue(idm->GetId("ParamEyeBallX"), _dragManager->GetX());
             _model->AddParameterValue(idm->GetId("ParamEyeBallY"), _dragManager->GetY());
         }
+
         if (_physics) _physics->Evaluate(_model, dt);
         _model->Update();
     }
@@ -108,6 +122,7 @@ private:
         if (_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) _jvm->AttachCurrentThread((void**)&env, nullptr);
         return env;
     }
+
     JavaVM* _jvm;
     jobject _javaObj = nullptr;
     std::vector<csmByte> _mocBuffer, _physicsBuffer, _poseBuffer;
@@ -183,10 +198,10 @@ JNIEXPORT jboolean JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_isHitNative
     return hit;
 }
 
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_startMotionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jint priority) {
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_startMotionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jint priority, jboolean loop) {
     jsize len = env->GetArrayLength(buffer);
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
-    ((JniUserModel*)ptr)->startMotionCopy((const csmByte*)data, len, priority);
+    ((JniUserModel*)ptr)->startMotionCopy((const csmByte*)data, len, priority, loop);
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
 }
 

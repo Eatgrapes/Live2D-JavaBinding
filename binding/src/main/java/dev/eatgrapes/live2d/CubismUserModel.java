@@ -37,11 +37,11 @@ public class CubismUserModel extends Native {
     public boolean isHit(String drawableId, float x, float y) { return isHitNative(_ptr, drawableId, x, y); }
     private static native boolean isHitNative(long ptr, String drawableId, float x, float y);
 
-    public void startMotion(byte[] buffer, int priority, Consumer<String> onFinished) {
+    public void startMotion(byte[] buffer, int priority, boolean loop, Consumer<String> onFinished) {
         this.motionFinishedCallback = onFinished;
-        startMotionNative(_ptr, buffer, priority);
+        startMotionNative(_ptr, buffer, priority, loop);
     }
-    private static native void startMotionNative(long ptr, byte[] buffer, int priority);
+    private static native void startMotionNative(long ptr, byte[] buffer, int priority, boolean loop);
 
     private void onMotionFinished(String name) {
         if (motionFinishedCallback != null) {
