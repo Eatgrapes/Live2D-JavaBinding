@@ -45,9 +45,9 @@ public:
 
         _motionBuffers[motion] = std::move(motionBuf);
         
-        motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self, void* data) {
-            auto* model = static_cast<JniUserModel*>(data);
+        motion->SetFinishedMotionHandlerAndMotionCustomData([](ACubismMotion* self) {
             auto* m = static_cast<CubismMotion*>(self);
+            auto* model = static_cast<JniUserModel*>(m->GetFinishedMotionCustomData());
             model->onMotionEnd(m);
         }, this);
 
@@ -65,6 +65,13 @@ public:
         jstring name = env->NewStringUTF("motion");
         env->CallVoidMethod(_javaObj, mid, name);
         env->DeleteLocalRef(name);
+    }
+
+    bool isHitTransformed(const char* id, float x, float y) {
+        if (!_model || !_modelMatrix) return false;
+        float mx = _modelMatrix->InvertTransformX(x);
+        float my = _modelMatrix->InvertTransformY(y);
+        return IsHit(CubismFramework::GetIdManager()->GetId(id), mx, my);
     }
 
     void update(float dt) {
@@ -129,6 +136,35 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_loadPoseNative(
     env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
 }
 
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_loadExpressionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jstring name) {
+    const char* n = env->GetStringUTFChars(name, nullptr);
+    jsize len = env->GetArrayLength(buffer);
+    jbyte* data = env->GetByteArrayElements(buffer, nullptr);
+    ((JniUserModel*)ptr)->LoadExpression((const csmByte*)data, len, n);
+    env->ReleaseByteArrayElements(buffer, data, JNI_ABORT);
+    env->ReleaseStringUTFChars(name, n);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createRendererNative(JNIEnv*, jclass, jlong ptr) {
+    ((JniUserModel*)ptr)->CreateRenderer();
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_registerTextureNative(JNIEnv*, jclass, jlong ptr, jint index, jint textureId) {
+    auto* r = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
+    if (r) r->BindTexture(index, (GLuint)textureId);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setDraggingNative(JNIEnv*, jclass, jlong ptr, jfloat x, jfloat y) {
+    ((JniUserModel*)ptr)->SetDragging(x, y);
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_isHitNative(JNIEnv* env, jclass, jlong ptr, jstring id, jfloat x, jfloat y) {
+    const char* s = env->GetStringUTFChars(id, nullptr);
+    bool hit = ((JniUserModel*)ptr)->isHitTransformed(s, x, y);
+    env->ReleaseStringUTFChars(id, s);
+    return hit;
+}
+
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_startMotionNative(JNIEnv* env, jclass, jlong ptr, jbyteArray buffer, jint priority) {
     jsize len = env->GetArrayLength(buffer);
     jbyte* data = env->GetByteArrayElements(buffer, nullptr);
@@ -138,18 +174,6 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_startMotionNati
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_updateNative(JNIEnv*, jclass, jlong ptr, jfloat dt) {
     ((JniUserModel*)ptr)->update(dt);
-}
-
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_registerTextureNative(JNIEnv*, jclass, jlong ptr, jint index, jint textureId) {
-    auto* r = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
-    if (r) r->BindTexture(index, (GLuint)textureId);
-}
-
-JNIEXPORT jboolean JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_isHitNative(JNIEnv* env, jclass, jlong ptr, jstring id, jfloat x, jfloat y) {
-    const char* s = env->GetStringUTFChars(id, nullptr);
-    bool hit = ((JniUserModel*)ptr)->isHitTransformed(s, x, y);
-    env->ReleaseStringUTFChars(id, s);
-    return hit;
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setParameterValueNative(JNIEnv* env, jclass, jlong ptr, jstring id, jfloat value) {
