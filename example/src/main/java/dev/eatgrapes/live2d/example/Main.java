@@ -59,6 +59,22 @@ public class Main {
             t.sendResponseHeaders(200, 0);
             t.close();
         });
+        server.createContext("/parameter", t -> {
+            String query = t.getRequestURI().getQuery();
+            String[] parts = query.split("&");
+            String id = "";
+            float value = 0;
+            for (String part : parts) {
+                String[] kv = part.split("=");
+                if (kv[0].equals("id")) id = kv[1];
+                else if (kv[0].equals("value")) value = Float.parseFloat(kv[1]);
+            }
+            String finalId = id;
+            float finalValue = value;
+            taskQueue.add(() -> model.setParameterValue(finalId, finalValue));
+            t.sendResponseHeaders(200, 0);
+            t.close();
+        });
         server.setExecutor(null);
         server.start();
         System.out.println("Control server started on port 8080");
