@@ -14,7 +14,3 @@ The library is designed to be **unopinionated** about your windowing system. Whe
 *   **[Rendering Loop](Rendering-Loop)**: The essential `update` and `draw` cycle.
 *   **[Motion & Expressions](Motion-and-Expressions)**: Bringing the model to life with animations.
 *   **[Interaction & Parameters](Interaction-and-Parameters)**: Hit testing, eye tracking, and manual parameter control.
-
-## Status
-
-This project is currently **Work in Progress**. APIs may change slightly as we reach feature parity with the official C++ SDK.
