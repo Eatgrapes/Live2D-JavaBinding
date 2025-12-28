@@ -14,15 +14,12 @@ A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/
 
 ## Implemented Features
 
-- [x] **Model Loading**: Support for loading `.moc3` model files.
-- [x] **Expression System**: Load and switch between multiple expressions.
-- [x] **Motion System**: Play motions with priority control, looping, and completion callbacks.
-- [x] **Physics System**: Realistic movement for hair, clothing, etc., via `.physics3.json`.
-- [x] **Pose System**: Support for part switching and visibility control.
-- [x] **Parameter Control**: Manually set and get parameter values (e.g., AngleX, EyeOpen).
-- [x] **Interaction**: Mouse/cursor dragging support and hit detection for specific areas.
-- [x] **Rendering**: OpenGL-based rendering with easy texture registration.
-- [x] **Auto Loader**: Automatic extraction and loading of platform-specific native libraries from JARs.
+- [x] **Model Loading**: Support for `.moc3`, physics, and pose loading.
+- [x] **Expression System**: Load and switch model expressions.
+- [x] **Motion System**: Playback with priority control and callbacks.
+- [x] **Parameter Control**: Manually set or get model parameter values.
+- [x] **Interaction**: Dragging support and hit detection.
+- [x] **Rendering**: OpenGL-based rendering and texture management.
 
 ## About JNI Integration
 
