@@ -4,9 +4,6 @@ A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/
 
 For detailed documentation, please visit our [Wiki](https://github.com/Eatgrapes/Live2D-JavaBinding/wiki).
 
-> **Status: Work in Progress**  
-> This project is currently under active development. Contributions are welcome!
-
 ## Features
 
 - **Decoupled Distribution**: Java logic and native binaries are separated for flexibility. Native JARs are fully self-contained.
