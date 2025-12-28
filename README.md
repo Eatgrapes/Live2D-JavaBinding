@@ -2,6 +2,8 @@
 
 A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/), enabling seamless integration of Live2D models in Java applications (Suitable for OpenGL).
 
+For detailed documentation, please visit our [Wiki](https://github.com/Eatgrapes/Live2D-JavaBinding/wiki).
+
 > **Status: Work in Progress**  
 > This project is currently under active development. Contributions are welcome!
 
