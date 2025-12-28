@@ -61,6 +61,9 @@ public class CubismUserModel extends Native {
     public void setParameterValue(String id, float value) { setParameterValueNative(_ptr, id, value); }
     private static native void setParameterValueNative(long ptr, String id, float value);
 
+    public float getParameterValue(String id) { return getParameterValueNative(_ptr, id); }
+    private static native float getParameterValueNative(long ptr, String id);
+
     public float getCanvasWidth() { return getCanvasWidthNative(_ptr); }
     private static native float getCanvasWidthNative(long ptr);
 

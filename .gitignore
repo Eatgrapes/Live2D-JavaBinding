@@ -6,6 +6,7 @@ native/include/
 target/
 **/target/
 *.log
+*.class
 
 # SDK
 /sdk/

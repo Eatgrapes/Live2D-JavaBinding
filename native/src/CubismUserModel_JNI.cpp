@@ -247,8 +247,17 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_updateNative(JN
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setParameterValueNative(JNIEnv* env, jclass, jlong ptr, jstring id, jfloat value) {
     const char* s = env->GetStringUTFChars(id, nullptr);
-    ((JniUserModel*)ptr)->GetModel()->SetParameterValue(CubismFramework::GetIdManager()->GetId(s), value);
+    auto* model = ((JniUserModel*)ptr)->GetModel();
+    model->SetParameterValue(CubismFramework::GetIdManager()->GetId(s), value);
+    model->SaveParameters();
     env->ReleaseStringUTFChars(id, s);
+}
+
+JNIEXPORT jfloat JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getParameterValueNative(JNIEnv* env, jclass, jlong ptr, jstring id) {
+    const char* s = env->GetStringUTFChars(id, nullptr);
+    float value = ((JniUserModel*)ptr)->GetModel()->GetParameterValue(CubismFramework::GetIdManager()->GetId(s));
+    env->ReleaseStringUTFChars(id, s);
+    return value;
 }
 
 JNIEXPORT jfloat JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getCanvasWidthNative(JNIEnv*, jclass, jlong ptr) {
