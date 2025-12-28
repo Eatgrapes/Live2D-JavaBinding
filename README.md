@@ -12,6 +12,18 @@ A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/
 - **Simple and Intuitive API**: Easy-to-use interfaces for model loading, rendering, and interaction.
 - **JNI Integration**: Leverages Java Native Interface (JNI) for high-performance native code execution.
 
+## Implemented Features
+
+- [x] **Model Loading**: Support for loading `.moc3` model files.
+- [x] **Expression System**: Load and switch between multiple expressions.
+- [x] **Motion System**: Play motions with priority control, looping, and completion callbacks.
+- [x] **Physics System**: Realistic movement for hair, clothing, etc., via `.physics3.json`.
+- [x] **Pose System**: Support for part switching and visibility control.
+- [x] **Parameter Control**: Manually set and get parameter values (e.g., AngleX, EyeOpen).
+- [x] **Interaction**: Mouse/cursor dragging support and hit detection for specific areas.
+- [x] **Rendering**: OpenGL-based rendering with easy texture registration.
+- [x] **Auto Loader**: Automatic extraction and loading of platform-specific native libraries from JARs.
+
 ## About JNI Integration
 
 JNI (Java Native Interface) is a programming framework that enables Java code to interact with native applications and libraries written in languages like C or C++. In this project:
