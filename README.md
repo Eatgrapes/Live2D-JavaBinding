@@ -1,6 +1,6 @@
 # Live2D-JavaBinding
 
-A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/products/cubism-sdk), enabling seamless integration of Live2D models in Java applications.
+A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/), enabling seamless integration of Live2D models in Java applications.
 
 > **Status: Work in Progress**  
 > This project is currently under active development. Contributions are welcome!
