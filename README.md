@@ -1,6 +1,6 @@
 # Live2D-JavaBinding
 
-A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/), enabling seamless integration of Live2D models in Java applications.
+A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/), enabling seamless integration of Live2D models in Java applications (Suitable for OpenGL).
 
 > **Status: Work in Progress**  
 > This project is currently under active development. Contributions are welcome!
@@ -9,6 +9,7 @@ A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/
 
 - **Decoupled Distribution**: Java logic and native binaries are separated for flexibility. Native JARs are fully self-contained.
 - **Cross-Platform Support**: Compatible with Windows (x64), Linux (x64, arm64), and macOS (x64, arm64).
+- **OpenGL Based**: Designed for OpenGL-accelerated applications (e.g., LWJGL, JOGL).
 - **Simple and Intuitive API**: Easy-to-use interfaces for model loading, rendering, and interaction.
 - **JNI Integration**: Leverages Java Native Interface (JNI) for high-performance native code execution.
 
