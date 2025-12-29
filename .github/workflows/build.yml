@@ -28,12 +28,6 @@ jobs:
       - name: Install Dependencies (Linux)
         if: contains(matrix.os, 'ubuntu')
         run: |
-          sudo grep -rl "ports.ubuntu.com" /etc/apt/sources.list* | xargs -r sudo sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ftp.gwdg.de/pub/linux/ubuntu-ports|g'
-          sudo rm -rf /var/lib/apt/lists/*
-          echo "Acquire::http::Pipeline-Depth 0;" | sudo tee /etc/apt/apt.conf.d/99custom
-          echo "Acquire::http::No-Cache true;" | sudo tee -a /etc/apt/apt.conf.d/99custom
-          echo "Acquire::BrokenProxy true;" | sudo tee -a /etc/apt/apt.conf.d/99custom
-          sudo apt-get update || (sleep 10; sudo apt-get update)
           sudo apt-get install -y libgles2-mesa-dev
 
       - name: Build and Package
