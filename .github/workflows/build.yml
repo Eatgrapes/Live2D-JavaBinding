@@ -27,7 +27,10 @@ jobs:
 
       - name: Install Dependencies (Linux)
         if: contains(matrix.os, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y libgles2-mesa-dev
+        run: |
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo apt-get update
+          sudo apt-get install -y libgles2-mesa-dev
 
       - name: Build and Package
         run: python3 scripts/build.py
