@@ -28,7 +28,7 @@ jobs:
       - name: Install Dependencies (Linux)
         if: contains(matrix.os, 'ubuntu')
         run: |
-          sudo grep -rl "ports.ubuntu.com" /etc/apt/sources.list* | xargs -r sudo sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://mirror.math.princeton.edu/pub/ubuntu-ports|g'
+          sudo grep -rl "ports.ubuntu.com" /etc/apt/sources.list* | xargs -r sudo sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ftp.gwdg.de/pub/linux/ubuntu-ports|g'
           sudo rm -rf /var/lib/apt/lists/*
           echo "Acquire::http::Pipeline-Depth 0;" | sudo tee /etc/apt/apt.conf.d/99custom
           echo "Acquire::http::No-Cache true;" | sudo tee -a /etc/apt/apt.conf.d/99custom
