@@ -20,8 +20,8 @@ Go to the [GitHub Releases](../../releases) page and download:
 You can install them into your local Maven repository:
 
 ```bash
-mvn install:install-file -Dfile=live2d-shared.jar -DgroupId=com.example -DartifactId=live2d-shared -Dversion=1.0.0 -Dpackaging=jar
-mvn install:install-file -Dfile=live2d-native-windows-x64.jar -DgroupId=com.example -DartifactId=live2d-native -Dversion=1.0.0 -Dpackaging=jar -Dclassifier=windows-x64
+mvn install:install-file -Dfile=live2d-shared.jar -DgroupId=dev.eatgrapes -DartifactId=live2d-shared -Dversion=1.0.0 -Dpackaging=jar
+mvn install:install-file -Dfile=live2d-native-windows-x64.jar -DgroupId=dev.eatgrapes -DartifactId=live2d-native -Dversion=1.0.0 -Dpackaging=jar -Dclassifier=windows-x64
 ```
 
 ### 3. Build Configuration
@@ -31,14 +31,14 @@ mvn install:install-file -Dfile=live2d-native-windows-x64.jar -DgroupId=com.exam
 <dependencies>
     <!-- The Core Java API -->
     <dependency>
-        <groupId>com.example</groupId>
+        <groupId>dev.eatgrapes</groupId>
         <artifactId>live2d-shared</artifactId>
         <version>1.0.0</version>
     </dependency>
 
     <!-- Native Implementation -->
     <dependency>
-        <groupId>com.example</groupId>
+        <groupId>dev.eatgrapee</groupId>
         <artifactId>live2d-native</artifactId>
         <version>1.0.0</version>
         <classifier>windows-x64</classifier> <!-- Change classifier as needed -->
