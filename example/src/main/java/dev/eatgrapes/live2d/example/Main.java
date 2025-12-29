@@ -143,7 +143,11 @@ public class Main {
             }
         });
         
-        CubismFramework.startUp();
+        CubismFramework.startUp(msg -> {
+            if (!msg.contains("Live2D Cubism SDK Core Version")) {
+                System.out.println(msg);
+            }
+        }, CubismFramework.LogLevel.WARNING);
         CubismFramework.initialize();
     }
 

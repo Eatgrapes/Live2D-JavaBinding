@@ -65,6 +65,30 @@ public:
 
 static JniAllocator allocator;
 static CubismFramework::Option option;
+static bool g_useJavaLogger = false;
+
+static void LogFunction(const char* message) {
+    if (!g_useJavaLogger) return;
+    
+    JNIEnv* env;
+    bool attached = false;
+    if (g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+        g_jvm->AttachCurrentThread((void**)&env, nullptr);
+        attached = true;
+    }
+
+    jclass cls = env->FindClass("dev/eatgrapes/live2d/CubismFramework");
+    if (cls) {
+        jmethodID mid = env->GetStaticMethodID(cls, "onLog", "(Ljava/lang/String;)V");
+        if (mid) {
+            jstring str = env->NewStringUTF(message);
+            env->CallStaticVoidMethod(cls, mid, str);
+            env->DeleteLocalRef(str);
+        }
+    }
+
+    if (attached) g_jvm->DetachCurrentThread();
+}
 
 extern "C" {
 
@@ -76,9 +100,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     return JNI_VERSION_1_6;
 }
 
-JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismFramework_startUp(JNIEnv* env, jclass clazz) {
-    option.LogFunction = [](const char* message) { };
-    option.LoggingLevel = CubismFramework::Option::LogLevel_Off;
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismFramework_startUpNative(JNIEnv* env, jclass clazz, jboolean hasCallback, jint logLevel) {
+    g_useJavaLogger = hasCallback;
+    option.LogFunction = LogFunction;
+    option.LoggingLevel = static_cast<CubismFramework::Option::LogLevel>(logLevel);
     option.LoadFileFunction = LoadFile;
     option.ReleaseBytesFunction = ReleaseBytes;
     CubismFramework::StartUp(&allocator, &option);
