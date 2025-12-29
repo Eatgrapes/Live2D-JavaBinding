@@ -29,6 +29,7 @@ public class Main {
     private final Map<String, byte[]> motions = new HashMap<>();
     private final float[] mvp = new float[]{1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
     private final ConcurrentLinkedQueue<Runnable> taskQueue = new ConcurrentLinkedQueue<>();
+    private float modelScale = 1.0f;
 
     public void run() throws Exception {
         init();
@@ -72,6 +73,14 @@ public class Main {
             String finalId = id;
             float finalValue = value;
             taskQueue.add(() -> model.setParameterValue(finalId, finalValue));
+            t.sendResponseHeaders(200, 0);
+            t.close();
+        });
+        server.createContext("/scale", t -> {
+            String query = t.getRequestURI().getQuery();
+            String val = query.split("=")[1];
+            float s = Float.parseFloat(val);
+            taskQueue.add(() -> this.modelScale = s);
             t.sendResponseHeaders(200, 0);
             t.close();
         });
@@ -127,7 +136,7 @@ public class Main {
                 glViewport(0, 0, w.get(0), h.get(0));
                 float aspect = (float) w.get(0) / h.get(0);
                 for (int i = 0; i < 16; i++) mvp[i] = 0;
-                mvp[0] = 1.0f / aspect; mvp[5] = 1.0f; mvp[10] = 1.0f; mvp[15] = 1.0f;
+                mvp[0] = modelScale / aspect; mvp[5] = modelScale; mvp[10] = 1.0f; mvp[15] = 1.0f;
             }
             model.update(0.016f);
             model.draw(mvp);

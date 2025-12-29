@@ -38,8 +38,26 @@ public class ControlPanel {
             addSlider(paramPanel, "Body X", "ParamBodyAngleX", -10, 10, 0);
             frame.add(paramPanel);
 
+            JPanel viewPanel = new JPanel(new GridLayout(0, 1));
+            viewPanel.setBorder(BorderFactory.createTitledBorder("View"));
+            addScaleSlider(viewPanel, "Scale", 0.1f, 3.0f, 1.0f);
+            frame.add(viewPanel);
+
             frame.setVisible(true);
         });
+    }
+
+    private static void addScaleSlider(JPanel panel, String label, float min, float max, float initial) {
+        JPanel p = new JPanel(new BorderLayout());
+        JLabel l = new JLabel(label);
+        p.add(l, BorderLayout.WEST);
+        JSlider slider = new JSlider((int)(min * 100), (int)(max * 100), (int)(initial * 100));
+        slider.addChangeListener(e -> {
+            float val = slider.getValue() / 100.0f;
+            sendRequest("/scale?value=" + val);
+        });
+        p.add(slider, BorderLayout.CENTER);
+        panel.add(p);
     }
 
     private static void addSlider(JPanel panel, String label, String id, float min, float max, float initial) {
