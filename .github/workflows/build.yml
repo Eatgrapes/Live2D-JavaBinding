@@ -29,7 +29,10 @@ jobs:
         if: contains(matrix.os, 'ubuntu')
         run: |
           sudo rm -rf /var/lib/apt/lists/*
-          sudo apt-get update
+          echo "Acquire::http::Pipeline-Depth 0;" | sudo tee /etc/apt/apt.conf.d/99custom
+          echo "Acquire::http::No-Cache true;" | sudo tee -a /etc/apt/apt.conf.d/99custom
+          echo "Acquire::BrokenProxy true;" | sudo tee -a /etc/apt/apt.conf.d/99custom
+          sudo apt-get update || (sleep 10; sudo apt-get update)
           sudo apt-get install -y libgles2-mesa-dev
 
       - name: Build and Package
