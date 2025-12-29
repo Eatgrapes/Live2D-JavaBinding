@@ -41,10 +41,25 @@ public class ControlPanel {
             JPanel viewPanel = new JPanel(new GridLayout(0, 1));
             viewPanel.setBorder(BorderFactory.createTitledBorder("View"));
             addScaleSlider(viewPanel, "Scale", 0.1f, 3.0f, 1.0f);
+            addModelSelector(viewPanel);
             frame.add(viewPanel);
 
             frame.setVisible(true);
         });
+    }
+
+    private static void addModelSelector(JPanel panel) {
+        JPanel p = new JPanel(new BorderLayout());
+        JLabel l = new JLabel("Model");
+        p.add(l, BorderLayout.WEST);
+        String[] models = {"Hiyori", "Haru", "Mao", "Mark", "Natori", "Rice", "Wanko"};
+        JComboBox<String> box = new JComboBox<>(models);
+        box.addActionListener(e -> {
+            String m = (String) box.getSelectedItem();
+            sendRequest("/model?name=" + m);
+        });
+        p.add(box, BorderLayout.CENTER);
+        panel.add(p);
     }
 
     private static void addScaleSlider(JPanel panel, String label, float min, float max, float initial) {

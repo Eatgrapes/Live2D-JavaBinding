@@ -77,8 +77,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismFramework_startUp(JNIEnv* env, jclass clazz) {
-    option.LogFunction = [](const char* message) { printf("[Live2D Native] %s\n", message); };
-    option.LoggingLevel = CubismFramework::Option::LogLevel_Verbose;
+    option.LogFunction = [](const char* message) { };
+    option.LoggingLevel = CubismFramework::Option::LogLevel_Off;
     option.LoadFileFunction = LoadFile;
     option.ReleaseBytesFunction = ReleaseBytes;
     CubismFramework::StartUp(&allocator, &option);

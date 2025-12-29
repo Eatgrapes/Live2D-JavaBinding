@@ -1,5 +1,9 @@
 package dev.eatgrapes.live2d.example;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpServer;
 import dev.eatgrapes.live2d.CubismFramework;
 import dev.eatgrapes.live2d.CubismUserModel;
@@ -8,14 +12,18 @@ import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;
 
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -26,7 +34,8 @@ import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 public class Main {
     private long window;
     private CubismUserModel model;
-    private final Map<String, byte[]> motions = new HashMap<>();
+    private final Map<String, List<byte[]>> motionGroups = new HashMap<>();
+    private final List<Integer> loadedTextures = new ArrayList<>();
     private final float[] mvp = new float[]{1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
     private final ConcurrentLinkedQueue<Runnable> taskQueue = new ConcurrentLinkedQueue<>();
     private float modelScale = 1.0f;
@@ -46,8 +55,20 @@ public class Main {
             String query = t.getRequestURI().getQuery();
             String id = query.split("=")[1];
             taskQueue.add(() -> {
-                if (motions.containsKey(id)) {
-                    model.startMotion(motions.get(id), 3, false, null);
+                String key = id.toLowerCase();
+                if (key.equals("tap_body")) key = "tapbody";
+                
+                List<byte[]> group = null;
+                for (String k : motionGroups.keySet()) {
+                    if (k.equalsIgnoreCase(key)) {
+                        group = motionGroups.get(k);
+                        break;
+                    }
+                }
+                
+                if (group != null && !group.isEmpty()) {
+                    int idx = (int) (Math.random() * group.size());
+                    model.startMotion(group.get(idx), 3, false, null);
                 }
             });
             t.sendResponseHeaders(200, 0);
@@ -84,6 +105,19 @@ public class Main {
             t.sendResponseHeaders(200, 0);
             t.close();
         });
+        server.createContext("/model", t -> {
+            String query = t.getRequestURI().getQuery();
+            String name = query.split("=")[1];
+            taskQueue.add(() -> {
+                try {
+                    loadModel(name);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+            t.sendResponseHeaders(200, 0);
+            t.close();
+        });
         server.setExecutor(null);
         server.start();
         System.out.println("Control server started on port 8080");
@@ -108,20 +142,77 @@ public class Main {
                 if (model != null) model.setDragging(nx, ny);
             }
         });
+        
+        CubismFramework.startUp();
+        CubismFramework.initialize();
     }
 
     private void setup() throws Exception {
-        CubismFramework.startUp();
-        CubismFramework.initialize();
+        loadModel("Hiyori");
+    }
+    
+    private void loadModel(String name) throws Exception {
+        if (model != null) {
+            model.close();
+            model = null;
+        }
+        for (int tex : loadedTextures) {
+            glDeleteTextures(tex);
+        }
+        loadedTextures.clear();
+        motionGroups.clear();
+        
+        String baseDir = "/model/" + name + "/";
+        String model3Path = baseDir + name + ".model3.json";
+        
+        Gson gson = new Gson();
+        JsonObject settings;
+        try (InputStream is = getClass().getResourceAsStream(model3Path)) {
+            if (is == null) throw new RuntimeException("Model config not found: " + model3Path);
+            try (Reader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
+                settings = gson.fromJson(reader, JsonObject.class);
+            }
+        }
+        
         model = new CubismUserModel();
-        model.loadModel(load("/model/Hiyori/Hiyori.moc3"));
-        model.loadPose(load("/model/Hiyori/Hiyori.pose3.json"));
-        model.loadPhysics(load("/model/Hiyori/Hiyori.physics3.json"));
+        
+        JsonObject refs = settings.getAsJsonObject("FileReferences");
+        
+        String mocFile = refs.get("Moc").getAsString();
+        model.loadModel(load(baseDir + mocFile));
+        
+        if (refs.has("Pose")) {
+            model.loadPose(load(baseDir + refs.get("Pose").getAsString()));
+        }
+        
+        if (refs.has("Physics")) {
+            model.loadPhysics(load(baseDir + refs.get("Physics").getAsString()));
+        }
+        
         model.createRenderer();
-        model.registerTexture(0, loadTex("/model/Hiyori/Hiyori.2048/texture_00.png"));
-        model.registerTexture(1, loadTex("/model/Hiyori/Hiyori.2048/texture_01.png"));
-        motions.put("idle", load("/model/Hiyori/motions/Hiyori_m01.motion3.json"));
-        motions.put("tap_body", load("/model/Hiyori/motions/Hiyori_m04.motion3.json"));
+        
+        JsonArray textures = refs.getAsJsonArray("Textures");
+        for (int i = 0; i < textures.size(); i++) {
+            String texFile = textures.get(i).getAsString();
+            model.registerTexture(i, loadTex(baseDir + texFile));
+        }
+        
+        if (refs.has("Motions")) {
+            JsonObject motionsObj = refs.getAsJsonObject("Motions");
+            for (String groupName : motionsObj.keySet()) {
+                JsonArray groupArr = motionsObj.getAsJsonArray(groupName);
+                List<byte[]> loadedGroup = new ArrayList<>();
+                for (JsonElement elem : groupArr) {
+                    JsonObject m = elem.getAsJsonObject();
+                    String mFile = m.get("File").getAsString();
+                    try {
+                        loadedGroup.add(load(baseDir + mFile));
+                    } catch (Exception e) {
+                    }
+                }
+                motionGroups.put(groupName, loadedGroup);
+            }
+        }
     }
 
     private void loop() {
@@ -138,31 +229,40 @@ public class Main {
                 for (int i = 0; i < 16; i++) mvp[i] = 0;
                 mvp[0] = modelScale / aspect; mvp[5] = modelScale; mvp[10] = 1.0f; mvp[15] = 1.0f;
             }
-            model.update(0.016f);
-            model.draw(mvp);
+            if (model != null) {
+                model.update(0.016f);
+                model.draw(mvp);
+            }
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
     }
 
     private void cleanup() {
-        model.close();
+        if (model != null) model.close();
         CubismFramework.dispose();
         glfwTerminate();
     }
 
     private byte[] load(String p) throws Exception {
-        try (InputStream is = getClass().getResourceAsStream(p)) { return is.readAllBytes(); }
+        try (InputStream is = getClass().getResourceAsStream(p)) {
+            if (is == null) throw new RuntimeException("Resource not found: " + p);
+            return is.readAllBytes(); 
+        }
     }
 
     private int loadTex(String p) throws Exception {
         Path tmp = Files.createTempFile("l2d", ".png");
-        try (InputStream is = getClass().getResourceAsStream(p)) { Files.copy(is, tmp, StandardCopyOption.REPLACE_EXISTING); }
+        try (InputStream is = getClass().getResourceAsStream(p)) {
+            if (is == null) throw new RuntimeException("Texture not found: " + p);
+            Files.copy(is, tmp, StandardCopyOption.REPLACE_EXISTING); 
+        }
         int w, h, tex;
         ByteBuffer img;
         try (MemoryStack s = MemoryStack.stackPush()) {
             IntBuffer wb = s.mallocInt(1), hb = s.mallocInt(1), cb = s.mallocInt(1);
             img = STBImage.stbi_load(tmp.toString(), wb, hb, cb, 4);
+            if (img == null) throw new RuntimeException("Failed to load texture image: " + p);
             w = wb.get(); h = hb.get();
         }
         tex = glGenTextures();
@@ -174,6 +274,7 @@ public class Main {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img);
         STBImage.stbi_image_free(img);
         Files.delete(tmp);
+        loadedTextures.add(tex);
         return tex;
     }
 
