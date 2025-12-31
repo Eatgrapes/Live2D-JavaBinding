@@ -88,7 +88,6 @@ static PFN_glBindBuffer ptr_glBindBuffer = NULL;
 // Wrapper functions
 void APIENTRY glGenFramebuffers(GLsizei n, GLuint* framebuffers) { 
     if(ptr_glGenFramebuffers) {
-        fprintf(stderr, "Wrapper glGenFramebuffers called\n");
         ptr_glGenFramebuffers(n, framebuffers); 
     }
 }
@@ -145,7 +144,6 @@ void init_gles2_shim() {
         if (!ptr) fprintf(stderr, "Failed to load function: %s (and %s)\n", #name, #name #ext)
 
     LOAD_EXT(ptr_glGenFramebuffers, glGenFramebuffers, PFN_glGenFramebuffers, EXT);
-    if (ptr_glGenFramebuffers) fprintf(stderr, "Loaded glGenFramebuffers: %p\n", ptr_glGenFramebuffers);
 
     LOAD_EXT(ptr_glBindFramebuffer, glBindFramebuffer, PFN_glBindFramebuffer, EXT);
     LOAD_EXT(ptr_glFramebufferTexture2D, glFramebufferTexture2D, PFN_glFramebufferTexture2D, EXT);
