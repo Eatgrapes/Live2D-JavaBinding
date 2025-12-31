@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include <stddef.h>
+#include <stdio.h>
 
 typedef float GLfloat;
 typedef signed char GLbyte;
@@ -98,12 +99,29 @@ void init_gles2_shim() {
     static int initialized = 0;
     if (initialized) return;
     HMODULE hLib = GetModuleHandleA("opengl32.dll");
-    GET_PROC(glGenFramebuffers, PFNGLGENFRAMEBUFFERSPROC);
-    GET_PROC(glBindFramebuffer, PFNGLBINDFRAMEBUFFERPROC);
-    GET_PROC(glFramebufferTexture2D, PFNGLFRAMEBUFFERTEXTURE2DPROC);
-    GET_PROC(glDeleteFramebuffers, PFNGLDELETEFRAMEBUFFERSPROC);
-    GET_PROC(glCheckFramebufferStatus, PFNGLCHECKFRAMEBUFFERSTATUSPROC);
-    GET_PROC(glActiveTexture, PFNGLACTIVETEXTUREPROC);
+    if (!hLib) {
+        fprintf(stderr, "Failed to get handle for opengl32.dll\n");
+        return;
+    }
+    
+    #undef GET_PROC
+    #define GET_PROC(name, type) \
+        name = (type)wglGetProcAddress(#name); \
+        if (!name) name = (type)GetProcAddress(hLib, #name); \
+        if (!name) fprintf(stderr, "Failed to load function: %s\n", #name);
+
+    #define GET_PROC_EXT(name, type, ext) \
+        name = (type)wglGetProcAddress(#name); \
+        if (!name) name = (type)wglGetProcAddress(#name #ext); \
+        if (!name) name = (type)GetProcAddress(hLib, #name); \
+        if (!name) fprintf(stderr, "Failed to load function: %s (and %s)\n", #name, #name #ext);
+
+    GET_PROC_EXT(glGenFramebuffers, PFNGLGENFRAMEBUFFERSPROC, EXT);
+    GET_PROC_EXT(glBindFramebuffer, PFNGLBINDFRAMEBUFFERPROC, EXT);
+    GET_PROC_EXT(glFramebufferTexture2D, PFNGLFRAMEBUFFERTEXTURE2DPROC, EXT);
+    GET_PROC_EXT(glDeleteFramebuffers, PFNGLDELETEFRAMEBUFFERSPROC, EXT);
+    GET_PROC_EXT(glCheckFramebufferStatus, PFNGLCHECKFRAMEBUFFERSTATUSPROC, EXT);
+    GET_PROC_EXT(glActiveTexture, PFNGLACTIVETEXTUREPROC, ARB);
     GET_PROC(glBlendFuncSeparate, PFNGLBLENDFUNCSEPARATEPROC);
     GET_PROC(glCreateShader, PFNGLCREATESHADERPROC);
     GET_PROC(glShaderSource, PFNGLSHADERSOURCEPROC);
@@ -130,6 +148,6 @@ void init_gles2_shim() {
     GET_PROC(glGetVertexAttribiv, PFNGLGETVERTEXATTRIBIVPROC);
     GET_PROC(glValidateProgram, PFNGLVALIDATEPROGRAMPROC);
     GET_PROC(glBindBuffer, PFNGLBINDBUFFERPROC);
+    
     initialized = 1;
 }
-#endif
