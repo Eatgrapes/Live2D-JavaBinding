@@ -12,7 +12,7 @@ This guide will help you integrate Live2D-JavaBinding into your project.
 Since this library is not hosted on a public Maven repository, you must download the latest release and install it manually.
 
 ### 1. Download Release
-Go to the [GitHub Releases](../../releases) page and download:
+Go to the [GitHub Releases](https://github.com/Eatgrapes/Live2D-JavaBinding/releases) page and download:
 *   `live2d-shared.jar`
 *   `live2d-native-[platform].jar` (e.g., `live2d-native-windows-x64.jar`)
 
