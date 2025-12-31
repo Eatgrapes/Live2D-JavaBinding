@@ -10,6 +10,10 @@
 #include <mutex>
 #include <algorithm>
 
+#ifdef _WIN32
+extern "C" void init_gles2_shim();
+#endif
+
 using namespace Live2D::Cubism::Framework;
 using namespace Live2D::Cubism::Framework::Rendering;
 
@@ -211,6 +215,9 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setExpressionNa
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createRendererNative(JNIEnv*, jclass, jlong ptr) {
+#ifdef _WIN32
+    init_gles2_shim();
+#endif
     ((JniUserModel*)ptr)->CreateRenderer();
 }
 

@@ -13,26 +13,34 @@ extern "C" void init_gles2_shim();
 using namespace Live2D::Cubism::Framework;
 
 static JavaVM* g_jvm = nullptr;
+static jclass g_libraryLoaderClass = nullptr;
+static jmethodID g_loadResourceMethod = nullptr;
+static jclass g_cubismFrameworkClass = nullptr;
+static jmethodID g_onLogMethod = nullptr;
 
 static csmByte* LoadFile(const std::string filePath, csmSizeInt* outSize) {
     JNIEnv* env;
     bool attached = false;
-    if (g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+    jint res = g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6);
+    if (res == JNI_EDETACHED) {
         g_jvm->AttachCurrentThread((void**)&env, nullptr);
         attached = true;
+    } else if (res != JNI_OK) {
+        return nullptr;
     }
 
     csmByte* buffer = nullptr;
-    jclass loaderClass = env->FindClass("dev/eatgrapes/live2d/LibraryLoader");
-    jmethodID loadMethod = env->GetStaticMethodID(loaderClass, "loadResource", "(Ljava/lang/String;)[B");
-    jstring jPath = env->NewStringUTF(filePath.c_str());
-    jbyteArray bytes = (jbyteArray)env->CallStaticObjectMethod(loaderClass, loadMethod, jPath);
-    
-    if (bytes) {
-        jsize len = env->GetArrayLength(bytes);
-        *outSize = static_cast<csmSizeInt>(len);
-        buffer = (csmByte*)malloc(len);
-        env->GetByteArrayRegion(bytes, 0, len, (jbyte*)buffer);
+    if (g_libraryLoaderClass && g_loadResourceMethod) {
+        jstring jPath = env->NewStringUTF(filePath.c_str());
+        jbyteArray bytes = (jbyteArray)env->CallStaticObjectMethod(g_libraryLoaderClass, g_loadResourceMethod, jPath);
+        
+        if (bytes) {
+            jsize len = env->GetArrayLength(bytes);
+            *outSize = static_cast<csmSizeInt>(len);
+            buffer = (csmByte*)malloc(len);
+            env->GetByteArrayRegion(bytes, 0, len, (jbyte*)buffer);
+        }
+        env->DeleteLocalRef(jPath);
     }
 
     if (attached) g_jvm->DetachCurrentThread();
@@ -72,19 +80,18 @@ static void LogFunction(const char* message) {
     
     JNIEnv* env;
     bool attached = false;
-    if (g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+    jint res = g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6);
+    if (res == JNI_EDETACHED) {
         g_jvm->AttachCurrentThread((void**)&env, nullptr);
         attached = true;
+    } else if (res != JNI_OK) {
+        return;
     }
 
-    jclass cls = env->FindClass("dev/eatgrapes/live2d/CubismFramework");
-    if (cls) {
-        jmethodID mid = env->GetStaticMethodID(cls, "onLog", "(Ljava/lang/String;)V");
-        if (mid) {
-            jstring str = env->NewStringUTF(message);
-            env->CallStaticVoidMethod(cls, mid, str);
-            env->DeleteLocalRef(str);
-        }
+    if (g_cubismFrameworkClass && g_onLogMethod) {
+        jstring str = env->NewStringUTF(message);
+        env->CallStaticVoidMethod(g_cubismFrameworkClass, g_onLogMethod, str);
+        env->DeleteLocalRef(str);
     }
 
     if (attached) g_jvm->DetachCurrentThread();
@@ -94,9 +101,23 @@ extern "C" {
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     g_jvm = vm;
-#ifdef _WIN32
-    init_gles2_shim();
-#endif
+    JNIEnv* env;
+    if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    jclass loader = env->FindClass("dev/eatgrapes/live2d/LibraryLoader");
+    if (loader) {
+        g_libraryLoaderClass = (jclass)env->NewGlobalRef(loader);
+        g_loadResourceMethod = env->GetStaticMethodID(loader, "loadResource", "(Ljava/lang/String;)[B");
+    }
+
+    jclass framework = env->FindClass("dev/eatgrapes/live2d/CubismFramework");
+    if (framework) {
+        g_cubismFrameworkClass = (jclass)env->NewGlobalRef(framework);
+        g_onLogMethod = env->GetStaticMethodID(framework, "onLog", "(Ljava/lang/String;)V");
+    }
+
     return JNI_VERSION_1_6;
 }
 
