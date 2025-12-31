@@ -151,3 +151,4 @@ void init_gles2_shim() {
     
     initialized = 1;
 }
+#endif
