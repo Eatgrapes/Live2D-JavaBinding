@@ -147,7 +147,13 @@ public:
 private:
     JNIEnv* getEnv() {
         JNIEnv* env;
-        if (_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) _jvm->AttachCurrentThread((void**)&env, nullptr);
+        if (_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+#ifdef __ANDROID__
+            _jvm->AttachCurrentThread(&env, nullptr);
+#else
+            _jvm->AttachCurrentThread((void**)&env, nullptr);
+#endif
+        }
         return env;
     }
 

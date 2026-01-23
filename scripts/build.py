@@ -43,6 +43,8 @@ def download_sdk():
     
     gles2_hpp = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp")
     with open(gles2_hpp, "r", encoding="utf-8") as f: content = f.read()
+    content = content.replace("void Initialize(Framework::CubismModel* model);", 
+                              "void Initialize(Framework::CubismModel* model) override;")
     content = content.replace("void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount);", 
                               "void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount) override;")
     content = content.replace("virtual void SaveProfile();", "void SaveProfile() override;")
