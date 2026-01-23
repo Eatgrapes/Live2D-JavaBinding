@@ -98,7 +98,20 @@ def build_android():
     abis = ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"]
     toolchain = os.path.join(ndk, "build/cmake/android.toolchain.cmake")
 
+    core_lib_dir = os.path.join(SDK_DIR, "Core/lib/android")
+    if os.path.exists(core_lib_dir):
+        print(f"Listing {core_lib_dir}:")
+        for item in os.listdir(core_lib_dir):
+            print(f"  {item}")
+    else:
+        print(f"Directory not found: {core_lib_dir}")
+
     for abi in abis:
+        lib_path = os.path.join(SDK_DIR, "Core/lib/android", abi, "libLive2DCubismCore.a")
+        if not os.path.exists(lib_path):
+            print(f"Skipping {abi}: Library not found at {lib_path}")
+            continue
+
         print(f"Building for Android {abi}...")
         nb = os.path.join(root, f"native/build-android-{abi}")
         os.makedirs(nb, exist_ok=True)
