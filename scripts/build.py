@@ -18,7 +18,6 @@ GLES_HEADERS = {
 def run_cmd(cmd, cwd=None):
     print(f"Executing: {' '.join(cmd)}")
     shell = platform.system().lower() == "windows"
-    # Capture output to show on error, but also print it
     process = subprocess.Popen(cmd, cwd=cwd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for line in process.stdout:
         print(line, end="")
@@ -27,20 +26,22 @@ def run_cmd(cmd, cwd=None):
         print(f"Command failed with exit code {process.returncode}")
         sys.exit(process.returncode)
 
-def setup_env():
-    if not os.path.exists(SDK_DIR):
-        print("Downloading SDK...")
-        urllib.request.urlretrieve(SDK_URL, "sdk.zip")
-        with zipfile.ZipFile("sdk.zip", 'r') as z: z.extractall("temp")
-        inner = [d for d in os.listdir("temp") if os.path.isdir(os.path.join("temp", d))][0]
-        shutil.move(os.path.join("temp", inner), SDK_DIR)
-        shutil.rmtree("temp")
-        os.remove("sdk.zip")
-        tpp = os.path.join(SDK_DIR, "Framework/src/Rendering/CubismClippingManager.tpp")
-        with open(tpp, "r", encoding="utf-8") as f: content = f.read()
-        with open(tpp, "w", encoding="utf-8") as f: 
-            f.write(content.replace("_clearedMaskBufferFlags = NULL;", "_clearedMaskBufferFlags.Clear();"))
+def download_sdk():
+    if os.path.exists(SDK_DIR):
+        return
+    print("Downloading SDK...")
+    urllib.request.urlretrieve(SDK_URL, "sdk.zip")
+    with zipfile.ZipFile("sdk.zip", 'r') as z: z.extractall("temp")
+    inner = [d for d in os.listdir("temp") if os.path.isdir(os.path.join("temp", d))][0]
+    shutil.move(os.path.join("temp", inner), SDK_DIR)
+    shutil.rmtree("temp")
+    os.remove("sdk.zip")
+    tpp = os.path.join(SDK_DIR, "Framework/src/Rendering/CubismClippingManager.tpp")
+    with open(tpp, "r", encoding="utf-8") as f: content = f.read()
+    with open(tpp, "w", encoding="utf-8") as f: 
+        f.write(content.replace("_clearedMaskBufferFlags = NULL;", "_clearedMaskBufferFlags.Clear();"))
 
+def download_headers():
     inc_dir = os.path.abspath("native/include")
     for path, url in GLES_HEADERS.items():
         full_path = os.path.join(inc_dir, path)
@@ -51,31 +52,74 @@ def setup_env():
             with urllib.request.urlopen(req) as response, open(full_path, 'wb') as out_file:
                 shutil.copyfileobj(response, out_file)
 
-def get_tag():
+def get_platform_tag():
     os_name = platform.system().lower()
     arch = platform.machine().lower()
     p = "macos" if "darwin" in os_name else os_name
-    
     if "arm" in arch or "aarch64" in arch:
         a = "arm64"
     else:
         a = "x64"
     return f"{p}-{a}"
 
-def build():
-    tag = get_tag()
+def build_desktop():
+    tag = get_platform_tag()
     root = os.getcwd()
     nb = os.path.join(root, "native/build")
     os.makedirs(nb, exist_ok=True)
     run_cmd(["cmake", ".."], nb)
     run_cmd(["cmake", "--build", ".", "--config", "Release"], nb)
-
-    out = os.path.join(root, "out")
-    shutil.rmtree(out, ignore_errors=True)
-    classes = os.path.join(out, "classes")
-    os.makedirs(classes)
     
-    # Shaders
+    out_res = os.path.join(root, "out", "native_res", tag)
+    os.makedirs(out_res, exist_ok=True)
+    for p in [nb, f"{nb}/Release", f"{nb}/Debug"]:
+        if not os.path.exists(p): continue
+        for f in os.listdir(p):
+            if f.endswith((".so", ".dll", ".dylib")) and "live2d_jni" in f:
+                shutil.copy(os.path.join(p, f), out_res)
+
+def build_android():
+    ndk = os.environ.get("ANDROID_NDK_HOME") or os.environ.get("ANDROID_NDK_ROOT")
+    if not ndk:
+        print("ANDROID_NDK_HOME not set, skipping Android build")
+        return
+
+    root = os.getcwd()
+    abis = ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"]
+    toolchain = os.path.join(ndk, "build/cmake/android.toolchain.cmake")
+
+    for abi in abis:
+        print(f"Building for Android {abi}...")
+        nb = os.path.join(root, f"native/build-android-{abi}")
+        os.makedirs(nb, exist_ok=True)
+        
+        cmd = [
+            "cmake", "..",
+            f"-DCMAKE_TOOLCHAIN_FILE={toolchain}",
+            f"-DANDROID_ABI={abi}",
+            "-DANDROID_PLATFORM=android-21",
+            "-DCSM_TARGET_ANDROID_ES2=ON"
+        ]
+        if platform.system().lower() == "windows":
+             cmd.append("-GMinGW Makefiles") 
+
+        run_cmd(cmd, nb)
+        run_cmd(["cmake", "--build", "."], nb)
+
+        out_res = os.path.join(root, "out", "native_res", f"android-{abi}")
+        os.makedirs(out_res, exist_ok=True)
+        
+        for f in os.listdir(nb):
+             if f.endswith(".so") and "live2d_jni" in f:
+                shutil.copy(os.path.join(nb, f), out_res)
+
+def compile_java():
+    root = os.getcwd()
+    out = os.path.join(root, "out")
+    classes = os.path.join(out, "classes")
+    if os.path.exists(classes): shutil.rmtree(classes)
+    os.makedirs(classes)
+
     sd = os.path.join(classes, "live2d", "shaders")
     os.makedirs(sd)
     ss = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/Shaders/StandardES")
@@ -86,15 +130,33 @@ def build():
     run_cmd(["javac", "-d", classes, "--source-path", src] + j_files)
     run_cmd(["jar", "--create", "--file", os.path.join(out, "live2d-shared.jar"), "-C", classes, "."])
 
-    res = os.path.join(out, "native_res", tag)
-    os.makedirs(res)
-    for p in [nb, f"{nb}/Release", f"{nb}/Debug"]:
-        if not os.path.exists(p): continue
-        for f in os.listdir(p):
-            if f.endswith((".so", ".dll", ".dylib")) and "live2d_jni" in f:
-                shutil.copy(os.path.join(p, f), res)
-    run_cmd(["jar", "--create", "--file", os.path.join(out, f"live2d-native-{tag}.jar"), "-C", os.path.join(out, "native_res"), "."])
+def package_jars():
+    root = os.getcwd()
+    out = os.path.join(root, "out")
+    res_root = os.path.join(out, "native_res")
+    
+    if not os.path.exists(res_root): return
+
+    for platform_tag in os.listdir(res_root):
+        tag_dir = os.path.join(res_root, platform_tag)
+        if not os.path.isdir(tag_dir): continue
+        
+        jar_name = f"live2d-native-{platform_tag}.jar"
+        # We need to structure it as /<platform_tag>/<lib> inside the jar
+        # The current extract logic expects /<platform_tag>/<lib>
+        # So we create a temp structure
+        tmp_pkg = os.path.join(out, "tmp_pkg", platform_tag)
+        os.makedirs(tmp_pkg, exist_ok=True)
+        for f in os.listdir(tag_dir):
+            shutil.copy(os.path.join(tag_dir, f), tmp_pkg)
+        
+        run_cmd(["jar", "--create", "--file", os.path.join(out, jar_name), "-C", os.path.join(out, "tmp_pkg"), "."])
+        shutil.rmtree(os.path.join(out, "tmp_pkg"))
 
 if __name__ == "__main__":
-    setup_env()
-    build()
+    download_sdk()
+    download_headers()
+    compile_java()
+    build_desktop()
+    build_android()
+    package_jars()

@@ -30,6 +30,12 @@ jobs:
         run: |
           sudo apt-get install -y libgles2-mesa-dev
 
+      - name: Setup Android NDK
+        if: contains(matrix.os, 'ubuntu')
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
       - name: Build and Package
         run: python3 scripts/build.py
 
