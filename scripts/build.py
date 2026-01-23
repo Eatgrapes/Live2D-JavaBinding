@@ -157,6 +157,13 @@ if __name__ == "__main__":
     download_sdk()
     download_headers()
     compile_java()
-    build_desktop()
-    build_android()
+    
+    targets = sys.argv[1:]
+    if not targets:
+        build_desktop()
+        build_android()
+    else:
+        if "desktop" in targets: build_desktop()
+        if "android" in targets: build_android()
+
     package_jars()
