@@ -23,7 +23,11 @@ static csmByte* LoadFile(const std::string filePath, csmSizeInt* outSize) {
     bool attached = false;
     jint res = g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6);
     if (res == JNI_EDETACHED) {
+#ifdef __ANDROID__
+        g_jvm->AttachCurrentThread(&env, nullptr);
+#else
         g_jvm->AttachCurrentThread((void**)&env, nullptr);
+#endif
         attached = true;
     } else if (res != JNI_OK) {
         return nullptr;
@@ -82,7 +86,11 @@ static void LogFunction(const char* message) {
     bool attached = false;
     jint res = g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6);
     if (res == JNI_EDETACHED) {
+#ifdef __ANDROID__
+        g_jvm->AttachCurrentThread(&env, nullptr);
+#else
         g_jvm->AttachCurrentThread((void**)&env, nullptr);
+#endif
         attached = true;
     } else if (res != JNI_OK) {
         return;

@@ -40,6 +40,14 @@ def download_sdk():
     with open(tpp, "r", encoding="utf-8") as f: content = f.read()
     with open(tpp, "w", encoding="utf-8") as f: 
         f.write(content.replace("_clearedMaskBufferFlags = NULL;", "_clearedMaskBufferFlags.Clear();"))
+    
+    gles2_hpp = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp")
+    with open(gles2_hpp, "r", encoding="utf-8") as f: content = f.read()
+    content = content.replace("void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount);", 
+                              "void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount) override;")
+    content = content.replace("virtual void SaveProfile();", "void SaveProfile() override;")
+    content = content.replace("virtual void RestoreProfile();", "void RestoreProfile() override;")
+    with open(gles2_hpp, "w", encoding="utf-8") as f: f.write(content)
 
 def download_headers():
     inc_dir = os.path.abspath("native/include")
