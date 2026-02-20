@@ -5,7 +5,10 @@ This guide will help you integrate Live2D-JavaBinding into your project.
 ## Prerequisites
 
 1.  **Java 9 or higher**: The library uses JPMS (Java Platform Module System) and APIs introduced in Java 9.
-2.  **OpenGL Context**: You need a library to create a window and an OpenGL context. We recommend **LWJGL 3**, but any library that provides access to OpenGL bindings will work.
+2.  **Render Context**:
+    - OpenGL: any platform supported by this binding.
+    - Vulkan: currently **linux-x64** and **windows-x64** only.
+    We recommend **LWJGL 3** for both backends.
 
 ## Installation
 
@@ -38,7 +41,7 @@ mvn install:install-file -Dfile=live2d-native-windows-x64.jar -DgroupId=dev.eatg
 
     <!-- Native Implementation -->
     <dependency>
-        <groupId>dev.eatgrapee</groupId>
+        <groupId>dev.eatgrapes</groupId>
         <artifactId>live2d-native</artifactId>
         <version>1.0.0</version>
         <classifier>windows-x64</classifier> <!-- Change classifier as needed -->
@@ -65,8 +68,12 @@ dependencies {
 The general flow of a Live2D application is:
 
 1.  **Initialize**: Call `CubismFramework.startUp()`.
-2.  **Load**: Load your model bytes and textures.
-3.  **Loop**: In your render loop, call `model.update()` and `model.draw()`.
-4.  **Dispose**: Clean up when done.
+2.  **Select Backend**:
+    - `CubismFramework.makeGL()` for OpenGL
+    - `CubismFramework.makeVulkan(...)` for Vulkan
+3.  **Load**: Load your model bytes and textures.
+4.  **Loop**: In your render loop, call `model.update()` and `model.draw()`.
+5.  **Dispose**: Clean up when done.
+
 
 Check out the specific sections in the sidebar to learn how to implement each step!

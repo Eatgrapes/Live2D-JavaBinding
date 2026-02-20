@@ -15,6 +15,37 @@ GLES_HEADERS = {
     "KHR/khrplatform.h": "https://raw.githubusercontent.com/KhronosGroup/EGL-Registry/main/api/KHR/khrplatform.h"
 }
 
+def find_shader_compiler():
+    glslang = shutil.which("glslangValidator")
+    if glslang:
+        return ("glslangValidator", glslang)
+    glslc = shutil.which("glslc")
+    if glslc:
+        return ("glslc", glslc)
+    return (None, None)
+
+def compile_vulkan_shaders(out_dir):
+    shader_src_dir = os.path.join(SDK_DIR, "Framework/src/Rendering/Vulkan/Shaders/src")
+    if not os.path.isdir(shader_src_dir):
+        print(f"Vulkan shader source dir not found: {shader_src_dir}")
+        sys.exit(1)
+
+    compiler_kind, compiler_path = find_shader_compiler()
+    if compiler_path is None:
+        print("Vulkan shader compiler not found. Please install glslangValidator or glslc.")
+        print("Vulkan backend requires SPIR-V shader binaries.")
+        sys.exit(1)
+
+    for f in os.listdir(shader_src_dir):
+        if not (f.endswith(".vert") or f.endswith(".frag")):
+            continue
+        src_file = os.path.join(shader_src_dir, f)
+        out_file = os.path.join(out_dir, f.rsplit(".", 1)[0] + ".spv")
+        if compiler_kind == "glslangValidator":
+            run_cmd([compiler_path, "-V", src_file, f"-I{shader_src_dir}", "-o", out_file])
+        else:
+            run_cmd([compiler_path, src_file, f"-I{shader_src_dir}", "-o", out_file])
+
 def run_cmd(cmd, cwd=None):
     print(f"Executing: {' '.join(cmd)}")
     shell = platform.system().lower() == "windows"
@@ -26,30 +57,58 @@ def run_cmd(cmd, cwd=None):
         print(f"Command failed with exit code {process.returncode}")
         sys.exit(process.returncode)
 
-def download_sdk():
-    if os.path.exists(SDK_DIR):
+def patch_text_file(path, replacements):
+    if not os.path.exists(path):
         return
-    print("Downloading SDK...")
-    urllib.request.urlretrieve(SDK_URL, "sdk.zip")
-    with zipfile.ZipFile("sdk.zip", 'r') as z: z.extractall("temp")
-    inner = [d for d in os.listdir("temp") if os.path.isdir(os.path.join("temp", d))][0]
-    shutil.move(os.path.join("temp", inner), SDK_DIR)
-    shutil.rmtree("temp")
-    os.remove("sdk.zip")
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    original = content
+    for old, new in replacements:
+        content = content.replace(old, new)
+    if content != original:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+def apply_sdk_patches():
     tpp = os.path.join(SDK_DIR, "Framework/src/Rendering/CubismClippingManager.tpp")
-    with open(tpp, "r", encoding="utf-8") as f: content = f.read()
-    with open(tpp, "w", encoding="utf-8") as f: 
-        f.write(content.replace("_clearedMaskBufferFlags = NULL;", "_clearedMaskBufferFlags.Clear();"))
-    
+    patch_text_file(tpp, [
+        ("_clearedMaskBufferFlags = NULL;", "_clearedMaskBufferFlags.Clear();")
+    ])
+
     gles2_hpp = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp")
-    with open(gles2_hpp, "r", encoding="utf-8") as f: content = f.read()
-    content = content.replace("void Initialize(Framework::CubismModel* model);", 
-                              "void Initialize(Framework::CubismModel* model) override;")
-    content = content.replace("void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount);", 
-                              "void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount) override;")
-    content = content.replace("virtual void SaveProfile();", "void SaveProfile() override;")
-    content = content.replace("virtual void RestoreProfile();", "void RestoreProfile() override;")
-    with open(gles2_hpp, "w", encoding="utf-8") as f: f.write(content)
+    patch_text_file(gles2_hpp, [
+        ("void Initialize(Framework::CubismModel* model);", "void Initialize(Framework::CubismModel* model) override;"),
+        ("void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount);", "void Initialize(Framework::CubismModel* model, csmInt32 maskBufferCount) override;"),
+        ("virtual void SaveProfile();", "void SaveProfile() override;"),
+        ("virtual void RestoreProfile();", "void RestoreProfile() override;")
+    ])
+
+    opengl_cpp = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/CubismRenderer_OpenGLES2.cpp")
+    patch_text_file(opengl_cpp, [
+        (
+            "CubismRenderer* CubismRenderer::Create()\n{\n    return CSM_NEW CubismRenderer_OpenGLES2();\n}\n\nvoid CubismRenderer::StaticRelease()\n{\n    CubismRenderer_OpenGLES2::DoStaticRelease();\n}",
+            "#ifndef LIVE2D_CUSTOM_RENDERER_FACTORY\nCubismRenderer* CubismRenderer::Create()\n{\n    return CSM_NEW CubismRenderer_OpenGLES2();\n}\n\nvoid CubismRenderer::StaticRelease()\n{\n    CubismRenderer_OpenGLES2::DoStaticRelease();\n}\n#endif"
+        )
+    ])
+
+    vulkan_cpp = os.path.join(SDK_DIR, "Framework/src/Rendering/Vulkan/CubismRenderer_Vulkan.cpp")
+    patch_text_file(vulkan_cpp, [
+        (
+            "CubismRenderer* CubismRenderer::Create()\n{\n    return CSM_NEW CubismRenderer_Vulkan;\n}\n\nvoid CubismRenderer::StaticRelease()\n{\n    CubismRenderer_Vulkan::DoStaticRelease();\n}",
+            "#ifndef LIVE2D_CUSTOM_RENDERER_FACTORY\nCubismRenderer* CubismRenderer::Create()\n{\n    return CSM_NEW CubismRenderer_Vulkan;\n}\n\nvoid CubismRenderer::StaticRelease()\n{\n    CubismRenderer_Vulkan::DoStaticRelease();\n}\n#endif"
+        )
+    ])
+
+def download_sdk():
+    if not os.path.exists(SDK_DIR):
+        print("Downloading SDK...")
+        urllib.request.urlretrieve(SDK_URL, "sdk.zip")
+        with zipfile.ZipFile("sdk.zip", 'r') as z: z.extractall("temp")
+        inner = [d for d in os.listdir("temp") if os.path.isdir(os.path.join("temp", d))][0]
+        shutil.move(os.path.join("temp", inner), SDK_DIR)
+        shutil.rmtree("temp")
+        os.remove("sdk.zip")
+    apply_sdk_patches()
 
 def download_headers():
     inc_dir = os.path.abspath("native/include")
@@ -143,10 +202,17 @@ def compile_java():
     if os.path.exists(classes): shutil.rmtree(classes)
     os.makedirs(classes)
 
-    sd = os.path.join(classes, "live2d", "shaders")
-    os.makedirs(sd)
-    ss = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/Shaders/StandardES")
-    for f in os.listdir(ss): shutil.copy(os.path.join(ss, f), sd)
+    shader_root = os.path.join(classes, "live2d", "shaders")
+    gl_shader_dir = os.path.join(shader_root, "opengl")
+    vk_shader_dir = os.path.join(shader_root, "vulkan")
+    os.makedirs(gl_shader_dir)
+    os.makedirs(vk_shader_dir)
+
+    opengl_src = os.path.join(SDK_DIR, "Framework/src/Rendering/OpenGL/Shaders/StandardES")
+    for f in os.listdir(opengl_src):
+        shutil.copy(os.path.join(opengl_src, f), gl_shader_dir)
+
+    compile_vulkan_shaders(vk_shader_dir)
 
     src = os.path.join(root, "binding/src/main/java")
     j_files = [os.path.join(dp, f) for dp, dn, fn in os.walk(src) for f in fn if f.endswith('.java')]
@@ -161,6 +227,8 @@ def package_jars():
     if not os.path.exists(res_root): return
 
     for platform_tag in os.listdir(res_root):
+        if "-" not in platform_tag:
+            continue
         tag_dir = os.path.join(res_root, platform_tag)
         if not os.path.isdir(tag_dir): continue
         
@@ -171,7 +239,10 @@ def package_jars():
         tmp_pkg = os.path.join(out, "tmp_pkg", platform_tag)
         os.makedirs(tmp_pkg, exist_ok=True)
         for f in os.listdir(tag_dir):
-            shutil.copy(os.path.join(tag_dir, f), tmp_pkg)
+            src = os.path.join(tag_dir, f)
+            if not os.path.isfile(src):
+                continue
+            shutil.copy(src, tmp_pkg)
         
         run_cmd(["jar", "--create", "--file", os.path.join(out, jar_name), "-C", os.path.join(out, "tmp_pkg"), "."])
         shutil.rmtree(os.path.join(out, "tmp_pkg"))

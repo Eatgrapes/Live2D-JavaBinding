@@ -74,6 +74,32 @@ public class CubismUserModel extends Native {
     private static native void registerTextureNative(long ptr, int index, int textureId);
 
     /**
+     * Registers a texture for Vulkan renderer.
+     * @param index      The texture index (as defined in the model data).
+     * @param width      Texture width.
+     * @param height     Texture height.
+     * @param rgbaPixels Texture pixels in RGBA8 format.
+     */
+    public void registerTextureVulkan(int index, int width, int height, byte[] rgbaPixels) {
+        registerTextureVulkanNative(_ptr, index, width, height, rgbaPixels);
+    }
+    private static native void registerTextureVulkanNative(long ptr, int index, int width, int height, byte[] rgbaPixels);
+
+    /**
+     * Updates Vulkan render target for the current frame.
+     *
+     * @param image       VkImage handle
+     * @param imageView   VkImageView handle
+     * @param imageFormat VkFormat value
+     * @param width       Render target width
+     * @param height      Render target height
+     */
+    public void setVulkanRenderTarget(long image, long imageView, int imageFormat, int width, int height) {
+        setVulkanRenderTargetNative(_ptr, image, imageView, imageFormat, width, height);
+    }
+    private static native void setVulkanRenderTargetNative(long ptr, long image, long imageView, int imageFormat, int width, int height);
+
+    /**
      * Sets the dragging coordinates for interaction (e.g., look-at behavior).
      * @param x The x-coordinate in model space.
      * @param y The y-coordinate in model space.

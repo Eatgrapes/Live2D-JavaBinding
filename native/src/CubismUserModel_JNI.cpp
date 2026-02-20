@@ -4,11 +4,18 @@
 #include <Rendering/OpenGL/CubismRenderer_OpenGLES2.hpp>
 #include <Motion/CubismMotion.hpp>
 #include <Motion/CubismExpressionMotion.hpp>
+#include "RendererBackend.hpp"
 #include <vector>
 #include <string>
 #include <map>
 #include <mutex>
 #include <algorithm>
+#include <cstdint>
+
+#if defined(LIVE2D_HAS_VULKAN)
+#include <Rendering/Vulkan/CubismRenderer_Vulkan.hpp>
+#include <Rendering/Vulkan/CubismClass_Vulkan.hpp>
+#endif
 
 #ifdef _WIN32
 extern "C" void init_gles2_shim();
@@ -16,6 +23,75 @@ extern "C" void init_gles2_shim();
 
 using namespace Live2D::Cubism::Framework;
 using namespace Live2D::Cubism::Framework::Rendering;
+
+static void ThrowRuntimeException(JNIEnv* env, const char* message)
+{
+    jclass ex = env->FindClass("java/lang/RuntimeException");
+    if (ex)
+    {
+        env->ThrowNew(ex, message);
+    }
+}
+
+#if defined(LIVE2D_HAS_VULKAN)
+namespace
+{
+template<typename T>
+T JLongToVkHandle(jlong value)
+{
+    return (T)(uintptr_t)value;
+}
+
+VkCommandBuffer BeginSingleTimeCommands(const dev::eatgrapes::live2d::VulkanInitContext& ctx)
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = ctx.commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+    vkAllocateCommandBuffers(ctx.device, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    return commandBuffer;
+}
+
+void EndSingleTimeCommands(const dev::eatgrapes::live2d::VulkanInitContext& ctx, VkCommandBuffer commandBuffer)
+{
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(ctx.queue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(ctx.queue);
+    vkFreeCommandBuffers(ctx.device, ctx.commandPool, 1, &commandBuffer);
+}
+
+void CopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+{
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {width, height, 1};
+
+    vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+}
+}
+#endif
 
 class JniUserModel : public CubismUserModel {
 public:
@@ -32,6 +108,9 @@ public:
         if (env && _javaObj) env->DeleteGlobalRef(_javaObj);
         for (auto& it : _motionBuffers) CubismMotion::Delete(it.first);
         for (auto& it : _expressions) ACubismMotion::Delete(it.second);
+#if defined(LIVE2D_HAS_VULKAN)
+        releaseVulkanTextures();
+#endif
     }
 
     void loadModelCopy(const csmByte* buffer, csmSizeInt size) {
@@ -144,6 +223,93 @@ public:
         return IsHit(CubismFramework::GetIdManager()->GetId(id), _modelMatrix->InvertTransformX(x), _modelMatrix->InvertTransformY(y));
     }
 
+#if defined(LIVE2D_HAS_VULKAN)
+    bool registerTextureVulkanCopy(int index, int width, int height, const csmByte* rgba, csmSizeInt size) {
+        if (!rgba || width <= 0 || height <= 0 || size < static_cast<csmSizeInt>(width * height * 4)) {
+            return false;
+        }
+
+        if (!dev::eatgrapes::live2d::HasVulkanInitContext()) {
+            return false;
+        }
+        const auto& ctx = dev::eatgrapes::live2d::GetVulkanInitContext();
+        if (!ctx.initialized || ctx.device == VK_NULL_HANDLE || ctx.physicalDevice == VK_NULL_HANDLE ||
+            ctx.commandPool == VK_NULL_HANDLE || ctx.queue == VK_NULL_HANDLE) {
+            return false;
+        }
+
+        CubismBufferVulkan stagingBuffer;
+        const VkDeviceSize imageSize = static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height) * 4;
+        stagingBuffer.CreateBuffer(
+            ctx.device,
+            ctx.physicalDevice,
+            imageSize,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        );
+        stagingBuffer.Map(ctx.device, imageSize);
+        stagingBuffer.MemCpy(rgba, imageSize);
+        stagingBuffer.UnMap(ctx.device);
+
+        CubismImageVulkan image;
+        image.CreateImage(
+            ctx.device,
+            ctx.physicalDevice,
+            width,
+            height,
+            1,
+            VK_FORMAT_R8G8B8A8_UNORM,
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+        );
+
+        VkCommandBuffer commandBuffer = BeginSingleTimeCommands(ctx);
+        image.SetImageLayout(commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+        CopyBufferToImage(commandBuffer, stagingBuffer.GetBuffer(), image.GetImage(), static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+        image.SetImageLayout(commandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+        EndSingleTimeCommands(ctx, commandBuffer);
+
+        image.CreateView(ctx.device, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(ctx.physicalDevice, &properties);
+        image.CreateSampler(ctx.device, properties.limits.maxSamplerAnisotropy, 1);
+        stagingBuffer.Destroy(ctx.device);
+
+        auto* renderer = GetRenderer<CubismRenderer_Vulkan>();
+        if (!renderer) {
+            image.Destroy(ctx.device);
+            return false;
+        }
+
+        (void)index;
+        renderer->BindTexture(image);
+        _vulkanTextures.push_back(image);
+        return true;
+    }
+
+    void setVulkanRenderTarget(VkImage image, VkImageView imageView, VkFormat format, uint32_t width, uint32_t height) {
+        VkExtent2D extent{};
+        extent.width = width;
+        extent.height = height;
+        CubismRenderer_Vulkan::SetRenderTarget(image, imageView, format, extent);
+    }
+
+    void releaseVulkanTextures() {
+        if (!dev::eatgrapes::live2d::HasVulkanInitContext()) {
+            return;
+        }
+        const auto& ctx = dev::eatgrapes::live2d::GetVulkanInitContext();
+        if (!ctx.initialized || ctx.device == VK_NULL_HANDLE) {
+            return;
+        }
+        for (auto& texture : _vulkanTextures) {
+            texture.Destroy(ctx.device);
+        }
+        _vulkanTextures.clear();
+    }
+#endif
+
 private:
     JNIEnv* getEnv() {
         JNIEnv* env;
@@ -165,6 +331,9 @@ private:
     std::map<std::string, ACubismMotion*> _expressions;
     std::vector<CubismMotion*> _pendingDeletion;
     std::mutex _pendingMutex;
+#if defined(LIVE2D_HAS_VULKAN)
+    std::vector<CubismImageVulkan> _vulkanTextures;
+#endif
 };
 
 extern "C" {
@@ -222,7 +391,9 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setExpressionNa
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createRendererNative(JNIEnv*, jclass, jlong ptr) {
 #ifdef _WIN32
-    init_gles2_shim();
+    if (GetRendererBackend() == RendererBackend::OpenGL) {
+        init_gles2_shim();
+    }
 #endif
     ((JniUserModel*)ptr)->CreateRenderer();
 }
@@ -230,6 +401,52 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_createRendererN
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_registerTextureNative(JNIEnv*, jclass, jlong ptr, jint index, jint textureId) {
     auto* r = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
     if (r) r->BindTexture(index, (GLuint)textureId);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_registerTextureVulkanNative(
+    JNIEnv* env, jclass, jlong ptr, jint index, jint width, jint height, jbyteArray rgbaPixels
+) {
+#if defined(LIVE2D_HAS_VULKAN)
+    if (!rgbaPixels) {
+        ThrowRuntimeException(env, "rgbaPixels is null");
+        return;
+    }
+    const jsize len = env->GetArrayLength(rgbaPixels);
+    jbyte* data = env->GetByteArrayElements(rgbaPixels, nullptr);
+    const bool ok = ((JniUserModel*)ptr)->registerTextureVulkanCopy(
+        index,
+        width,
+        height,
+        reinterpret_cast<const csmByte*>(data),
+        static_cast<csmSizeInt>(len)
+    );
+    env->ReleaseByteArrayElements(rgbaPixels, data, JNI_ABORT);
+    if (!ok) {
+        ThrowRuntimeException(env, "Failed to register Vulkan texture.");
+    }
+#else
+    ThrowRuntimeException(env, "Vulkan backend is not available in this native build.");
+#endif
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setVulkanRenderTargetNative(
+    JNIEnv* env, jclass, jlong ptr, jlong image, jlong imageView, jint imageFormat, jint width, jint height
+) {
+#if defined(LIVE2D_HAS_VULKAN)
+    if (image == 0 || imageView == 0 || width <= 0 || height <= 0) {
+        ThrowRuntimeException(env, "Invalid Vulkan render target arguments");
+        return;
+    }
+    ((JniUserModel*)ptr)->setVulkanRenderTarget(
+        JLongToVkHandle<VkImage>(image),
+        JLongToVkHandle<VkImageView>(imageView),
+        static_cast<VkFormat>(imageFormat),
+        static_cast<uint32_t>(width),
+        static_cast<uint32_t>(height)
+    );
+#else
+    ThrowRuntimeException(env, "Vulkan backend is not available in this native build.");
+#endif
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_setDraggingNative(JNIEnv*, jclass, jlong ptr, jfloat x, jfloat y) {
@@ -296,8 +513,20 @@ JNIEXPORT jobjectArray JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_getDraw
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismUserModel_drawNative(JNIEnv* env, jclass, jlong ptr, jfloatArray matrix) {
     jfloat* m_ptr = env->GetFloatArrayElements(matrix, nullptr);
     CubismMatrix44 m; m.SetMatrix(m_ptr);
-    auto* r = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
-    if (r) { r->SetMvpMatrix(&m); r->DrawModel(); }
+    auto* glRenderer = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_OpenGLES2>();
+    if (glRenderer) {
+        glRenderer->SetMvpMatrix(&m);
+        glRenderer->DrawModel();
+    }
+#if defined(LIVE2D_HAS_VULKAN)
+    else {
+        auto* vkRenderer = ((JniUserModel*)ptr)->GetRenderer<CubismRenderer_Vulkan>();
+        if (vkRenderer) {
+            vkRenderer->SetMvpMatrix(&m);
+            vkRenderer->DrawModel();
+        }
+    }
+#endif
     env->ReleaseFloatArrayElements(matrix, m_ptr, JNI_ABORT);
 }
 

@@ -1,6 +1,8 @@
 # Welcome to the Live2D-JavaBinding Wiki
 
-This project provides a high-performance, native Java binding for the **Live2D Cubism SDK**. It allows you to load, render, and interact with Live2D models directly in your Java applications using OpenGL.
+This project provides a high-performance, native Java binding for the **Live2D Cubism SDK**. It allows you to load, render, and interact with Live2D models directly in your Java applications using OpenGL or Vulkan.
+
+Vulkan backend scope is currently limited to **linux-x64** and **windows-x64**. Other targets continue to use OpenGL.
 
 ## Philosophy
 

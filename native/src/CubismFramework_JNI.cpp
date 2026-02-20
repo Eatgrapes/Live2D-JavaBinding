@@ -1,8 +1,10 @@
 #include <jni.h>
 #include <CubismFramework.hpp>
 #include <ICubismAllocator.hpp>
+#include "RendererBackend.hpp"
 #include <cstdlib>
 #include <cstdio>
+#include <cstdint>
 #include <string>
 
 #ifdef _WIN32
@@ -10,7 +12,29 @@
 extern "C" void init_gles2_shim();
 #endif
 
+#if defined(LIVE2D_HAS_VULKAN)
+#include <Rendering/Vulkan/CubismRenderer_Vulkan.hpp>
+#endif
+
 using namespace Live2D::Cubism::Framework;
+using namespace Live2D::Cubism::Framework::Rendering;
+
+static void ThrowRuntimeException(JNIEnv* env, const char* message)
+{
+    jclass ex = env->FindClass("java/lang/RuntimeException");
+    if (ex)
+    {
+        env->ThrowNew(ex, message);
+    }
+}
+
+#if defined(LIVE2D_HAS_VULKAN)
+template<typename T>
+static T JLongToVkHandle(jlong value)
+{
+    return (T)(uintptr_t)value;
+}
+#endif
 
 static JavaVM* g_jvm = nullptr;
 static jclass g_libraryLoaderClass = nullptr;
@@ -136,6 +160,61 @@ JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismFramework_startUpNative(J
     option.LoadFileFunction = LoadFile;
     option.ReleaseBytesFunction = ReleaseBytes;
     CubismFramework::StartUp(&allocator, &option);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismFramework_makeGL(JNIEnv* env, jclass clazz) {
+    SetRendererBackend(RendererBackend::OpenGL);
+}
+
+JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismFramework_makeVulkanNative(
+    JNIEnv* env,
+    jclass clazz,
+    jlong device,
+    jlong physicalDevice,
+    jlong commandPool,
+    jlong queue,
+    jint swapchainImageCount,
+    jint width,
+    jint height,
+    jlong imageView,
+    jint imageFormat,
+    jint depthFormat
+) {
+#if defined(LIVE2D_HAS_VULKAN)
+    if (device == 0 || physicalDevice == 0 || commandPool == 0 || queue == 0 || imageView == 0 ||
+        swapchainImageCount <= 0 || width <= 0 || height <= 0) {
+        ThrowRuntimeException(env, "Invalid Vulkan context arguments");
+        return;
+    }
+
+    SetRendererBackend(RendererBackend::Vulkan);
+
+    dev::eatgrapes::live2d::VulkanInitContext ctx;
+    ctx.device = JLongToVkHandle<VkDevice>(device);
+    ctx.physicalDevice = JLongToVkHandle<VkPhysicalDevice>(physicalDevice);
+    ctx.commandPool = JLongToVkHandle<VkCommandPool>(commandPool);
+    ctx.queue = JLongToVkHandle<VkQueue>(queue);
+    ctx.initialized = true;
+    dev::eatgrapes::live2d::SetVulkanInitContext(ctx);
+
+    VkExtent2D extent{};
+    extent.width = static_cast<uint32_t>(width);
+    extent.height = static_cast<uint32_t>(height);
+    Live2D::Cubism::Framework::Rendering::CubismRenderer_Vulkan::InitializeConstantSettings(
+        ctx.device,
+        ctx.physicalDevice,
+        ctx.commandPool,
+        ctx.queue,
+        static_cast<csmUint32>(swapchainImageCount),
+        extent,
+        JLongToVkHandle<VkImageView>(imageView),
+        static_cast<VkFormat>(imageFormat),
+        static_cast<VkFormat>(depthFormat)
+    );
+    Live2D::Cubism::Framework::Rendering::CubismRenderer_Vulkan::EnableChangeRenderTarget();
+#else
+    ThrowRuntimeException(env, "Vulkan backend is not available in this native build.");
+#endif
 }
 
 JNIEXPORT void JNICALL Java_dev_eatgrapes_live2d_CubismFramework_initialize(JNIEnv* env, jclass clazz) {

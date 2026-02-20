@@ -148,6 +148,7 @@ public class Main {
                 System.out.println(msg);
             }
         }, CubismFramework.LogLevel.WARNING);
+        CubismFramework.makeGL();
         CubismFramework.initialize();
     }
 

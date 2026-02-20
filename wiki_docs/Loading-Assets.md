@@ -32,22 +32,26 @@ model.loadPhysics(physicsBytes);
 
 ## 4. Textures
 
-Textures are not loaded directly by the Live2D engine. Instead, **you** must load the image into OpenGL (using `STBImage` or similar) and give the Texture ID to the model.
+Textures are not loaded directly by the Live2D engine. Registration differs by backend:
 
 ```java
-// 1. Load image to OpenGL and get an ID (e.g., using LWJGL)
-int glTextureId = loadTexture("texture_00.png"); 
-
-// 2. Register it with the model. 
-// The index corresponds to the texture order in the .model3.json file.
+// OpenGL: load image to OpenGL and get an ID
+int glTextureId = loadTexture("texture_00.png");
 model.registerTexture(0, glTextureId);
+
+// Vulkan: decode to RGBA8 bytes and register
+byte[] rgba = decodeToRgba8("texture_00.png");
+model.registerTextureVulkan(0, width, height, rgba);
 ```
+
+The texture index corresponds to the texture order in the `.model3.json` file.
 
 ## 5. Renderer Creation
 
-Once the model is loaded, you must initialize its internal renderer. This requires an active OpenGL context.
+Once the model is loaded, you must initialize its internal renderer.  
+Before this step, select backend globally using `CubismFramework.makeGL()` or `CubismFramework.makeVulkan(...)`.
 
 ```java
-// Must be called on the render thread!
+// Must be called on the render thread/context owner
 model.createRenderer();
 ```

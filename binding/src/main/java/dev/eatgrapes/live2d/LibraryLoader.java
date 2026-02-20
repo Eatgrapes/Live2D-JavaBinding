@@ -13,6 +13,18 @@ import java.util.Locale;
  */
 public class LibraryLoader {
     private static boolean loaded = false;
+    private static final String[] VULKAN_SHADER_FILES = {
+            "VertShaderSrcSetupMask.spv",
+            "FragShaderSrcSetupMask.spv",
+            "VertShaderSrc.spv",
+            "FragShaderSrc.spv",
+            "VertShaderSrcMasked.spv",
+            "FragShaderSrcMask.spv",
+            "FragShaderSrcMaskInverted.spv",
+            "FragShaderSrcPremultipliedAlpha.spv",
+            "FragShaderSrcMaskPremultipliedAlpha.spv",
+            "FragShaderSrcMaskInvertedPremultipliedAlpha.spv"
+    };
 
     /**
      * Loads the native library.
@@ -76,12 +88,42 @@ public class LibraryLoader {
      * @return The byte content of the shader file, or null if not found.
      */
     public static byte[] loadResource(String name) {
-        String internalPath = "/live2d/shaders/" + name.substring(name.lastIndexOf("/") + 1);
+        if (name == null || name.isEmpty()) return null;
+        String normalized = name.replace('\\', '/');
+        String fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+        String shaderGroup = fileName.endsWith(".spv") ? "vulkan" : "opengl";
+        String internalPath = "/live2d/shaders/" + shaderGroup + "/" + fileName;
         try (InputStream is = LibraryLoader.class.getResourceAsStream(internalPath)) {
             if (is == null) return null;
             return is.readAllBytes();
         } catch (IOException e) {
             return null;
+        }
+    }
+
+    /**
+     * Ensures Vulkan SPIR-V shaders exist in the runtime working directory under {@code FrameworkShaders/}.
+     * This keeps compatibility with Cubism Vulkan shader loading paths.
+     */
+    public static synchronized void prepareVulkanShadersToDisk() {
+        Path shaderDir = Paths.get("FrameworkShaders");
+        try {
+            Files.createDirectories(shaderDir);
+            for (String fileName : VULKAN_SHADER_FILES) {
+                Path target = shaderDir.resolve(fileName);
+                if (Files.exists(target) && Files.size(target) > 0) {
+                    continue;
+                }
+                String internalPath = "/live2d/shaders/vulkan/" + fileName;
+                try (InputStream is = LibraryLoader.class.getResourceAsStream(internalPath)) {
+                    if (is == null) {
+                        throw new RuntimeException("Vulkan shader not found in resources: " + internalPath);
+                    }
+                    Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to prepare Vulkan shaders on disk", e);
         }
     }
 }

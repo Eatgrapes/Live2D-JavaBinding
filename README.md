@@ -1,14 +1,15 @@
 # Live2D-JavaBinding
 
-A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/), enabling seamless integration of Live2D models in Java applications (Suitable for OpenGL).
+A native Java binding for the [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/), enabling seamless integration of Live2D models in Java applications.
 
 For detailed documentation, please visit our [Wiki](https://github.com/Eatgrapes/Live2D-JavaBinding/wiki).
 
 ## Features
 
 - **Decoupled Distribution**: Java logic and native binaries are separated for flexibility. Native JARs are fully self-contained.
-- **Cross-Platform Support**: Compatible with Windows (x64), Linux (x64, arm64), and macOS (x64, arm64).
-- **OpenGL Based**: Designed for OpenGL-accelerated applications (e.g., LWJGL, JOGL).
+- **Cross-Platform Support**: OpenGL path works on existing supported desktop targets.
+- **Dual Backend**: Runtime switching via `CubismFramework.makeGL()` / `CubismFramework.makeVulkan(...)`.
+- **Vulkan Scope**: Vulkan backend is supported on **linux-x64** and **windows-x64** only.
 - **Simple and Intuitive API**: Easy-to-use interfaces for model loading, rendering, and interaction.
 - **JNI Integration**: Leverages Java Native Interface (JNI) for high-performance native code execution.
 
@@ -19,7 +20,7 @@ For detailed documentation, please visit our [Wiki](https://github.com/Eatgrapes
 - [x] **Motion System**: Playback with priority control and callbacks.
 - [x] **Parameter Control**: Manually set or get model parameter values.
 - [x] **Interaction**: Dragging support and hit detection.
-- [x] **Rendering**: OpenGL-based rendering and texture management.
+- [x] **Rendering**: OpenGL and Vulkan rendering paths.
 
 ## About JNI Integration
 
@@ -40,6 +41,7 @@ import dev.eatgrapes.live2d.CubismUserModel;
 
 // 1. Initialize the Framework
 CubismFramework.startUp();
+CubismFramework.makeGL(); // or CubismFramework.makeVulkan(...)
 CubismFramework.initialize();
 
 // 2. Load Model & Components
@@ -50,7 +52,8 @@ model.loadPhysics(physicsBytes); // Load physics data
 
 // 3. Setup Renderer
 model.createRenderer();
-model.registerTexture(0, openGLTextureId); // Bind textures
+model.registerTexture(0, openGLTextureId); // OpenGL texture
+// Vulkan: model.registerTextureVulkan(index, width, height, rgbaPixels);
 
 // 4. Handle Interactions & Motions
 model.setDragging(nx, ny); // Enable eye tracking or dragging
@@ -63,12 +66,17 @@ model.update(deltaTime); // Update model state
 model.draw(mvpMatrix);   // Render the model
 ```
 
+For Vulkan, update render target each frame before `draw`:
+```java
+model.setVulkanRenderTarget(vkImage, vkImageView, vkFormat, width, height);
+```
+
 ## Project Structure
 
 - **`binding/`**: Contains the Java API definitions and module configurations.
 - **`native/`**: Houses the JNI C++ implementation, along with CMake build scripts for native compilation.
 - **`scripts/`**: Python scripts for automating builds across all supported platforms.
-- **`example/`**: A complete Maven-based demo project using LWJGL 3 for OpenGL integration.
+- **`example/`**: LWJGL 3 demos for OpenGL (`Main`) and Vulkan (`VulkanMain`).
 
 ## Building the Project
 
@@ -77,6 +85,7 @@ model.draw(mvpMatrix);   // Render the model
 - CMake 3.10+
 - A C++14-compatible compiler (e.g., GCC, Clang, or MSVC)
 - JDK 9 or higher
+- Vulkan shader compiler (`glslangValidator` or `glslc`) when building shader resources
 
 ### Build Command
 Run the following in the project root:
@@ -88,6 +97,8 @@ python3 scripts/build.py
 This will generate artifacts in the `out/` directory:
 - `live2d-shared.jar`: The core Java API.
 - `live2d-native-[platform].jar`: Platform-specific native libraries (e.g., `live2d-native-windows-x64.jar`).
+
+OpenGL and Vulkan are bundled into the same shared/native dependencies. No extra Vulkan-only JAR is required.
 
 ## Contributing
 

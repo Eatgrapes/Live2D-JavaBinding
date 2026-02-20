@@ -62,6 +62,62 @@ public class CubismFramework {
     private static native void startUpNative(boolean hasCallback, int logLevel);
 
     /**
+     * Selects OpenGL as the renderer backend for newly created renderers.
+     * Call this before {@link dev.eatgrapes.live2d.CubismUserModel#createRenderer()}.
+     */
+    public static native void makeGL();
+
+    /**
+     * Selects Vulkan as the renderer backend for newly created renderers and sets
+     * required Vulkan shared context values.
+     * <p>
+     * Supported targets: Linux x64 and Windows x64.
+     * Call this before {@link dev.eatgrapes.live2d.CubismUserModel#createRenderer()}.
+     *
+     * @param device              VkDevice handle
+     * @param physicalDevice      VkPhysicalDevice handle
+     * @param commandPool         VkCommandPool handle
+     * @param queue               VkQueue handle
+     * @param swapchainImageCount swapchain image count
+     * @param width               render target width
+     * @param height              render target height
+     * @param imageView           VkImageView handle of current render target
+     * @param imageFormat         VkFormat value of render target
+     * @param depthFormat         VkFormat value for depth image
+     */
+    public static void makeVulkan(
+            long device,
+            long physicalDevice,
+            long commandPool,
+            long queue,
+            int swapchainImageCount,
+            int width,
+            int height,
+            long imageView,
+            int imageFormat,
+            int depthFormat
+    ) {
+        LibraryLoader.prepareVulkanShadersToDisk();
+        makeVulkanNative(
+                device, physicalDevice, commandPool, queue,
+                swapchainImageCount, width, height, imageView, imageFormat, depthFormat
+        );
+    }
+
+    private static native void makeVulkanNative(
+            long device,
+            long physicalDevice,
+            long commandPool,
+            long queue,
+            int swapchainImageCount,
+            int width,
+            int height,
+            long imageView,
+            int imageFormat,
+            int depthFormat
+    );
+
+    /**
      * Initializes the framework resources.
      * Must be called after {@link #startUp()} and before using any other framework features.
      */

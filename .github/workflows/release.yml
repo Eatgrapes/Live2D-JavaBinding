@@ -37,7 +37,15 @@ jobs:
 
       - name: Install Dependencies (Linux)
         if: contains(matrix.os, 'ubuntu')
-        run: sudo apt-get install -y libgles2-mesa-dev
+        run: sudo apt-get install -y libgles2-mesa-dev glslang-tools
+
+      - name: Install Dependencies (macOS)
+        if: contains(matrix.os, 'macos')
+        run: brew install glslang
+
+      - name: Install Dependencies (Windows)
+        if: contains(matrix.os, 'windows')
+        run: choco install glslang -y
 
       - name: Build Desktop
         run: python3 scripts/build.py desktop
@@ -69,6 +77,9 @@ jobs:
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26b
+
+      - name: Install Vulkan Shader Compiler
+        run: sudo apt-get install -y glslang-tools
 
       - name: Build Android
         run: python3 scripts/build.py android

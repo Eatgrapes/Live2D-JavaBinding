@@ -11,10 +11,12 @@ import dev.eatgrapes.live2d.CubismFramework;
 
 // Call this ONCE at the start of your application
 CubismFramework.startUp();
+CubismFramework.makeGL(); // or CubismFramework.makeVulkan(...)
 CubismFramework.initialize();
 ```
 
 > **Note**: This automatically extracts and loads the native `.dll`, `.so`, or `.dylib` from the jar file. You don't need to manually configure `java.library.path`.
+> For Vulkan, call `makeVulkan(...)` before `initialize()` and pass your Vulkan context handles.
 
 ## 2. Global Disposal
 
