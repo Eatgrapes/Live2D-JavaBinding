@@ -39,17 +39,47 @@ jobs:
         if: contains(matrix.os, 'windows')
         shell: pwsh
         run: |
+          function Find-GlslangValidator {
+            $cmd = Get-Command glslangValidator -ErrorAction SilentlyContinue
+            if ($cmd) { return $cmd.Source }
+
+            $candidates = @()
+            if ($env:VULKAN_SDK) {
+              $candidates += (Join-Path $env:VULKAN_SDK 'Bin\glslangValidator.exe')
+            }
+            $candidates += @(
+              'C:\VulkanSDK\*\Bin\glslangValidator.exe',
+              'C:\Program Files\VulkanSDK\*\Bin\glslangValidator.exe',
+              "$env:USERPROFILE\VulkanSDK\*\Bin\glslangValidator.exe",
+              'C:\ProgramData\chocolatey\lib\vulkan-sdk\tools\**\glslangValidator.exe'
+            )
+
+            foreach ($pattern in $candidates) {
+              $found = Get-ChildItem -Path $pattern -File -Recurse -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending | Select-Object -First 1
+              if ($found) { return $found.FullName }
+            }
+            return $null
+          }
+
           $ErrorActionPreference = 'Continue'
           choco install vulkan-sdk -y
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Chocolatey install failed, falling back to winget..."
-            winget install --id KhronosGroup.VulkanSDK --accept-package-agreements --accept-source-agreements --disable-interactivity
-          }
           $ErrorActionPreference = 'Stop'
-          $sdkDir = Get-ChildItem 'C:\VulkanSDK' -Directory | Sort-Object Name -Descending | Select-Object -First 1
-          if (-not $sdkDir) { throw "Vulkan SDK not found under C:\VulkanSDK" }
-          "$($sdkDir.FullName)\Bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          glslangValidator --version
+
+          $validator = Find-GlslangValidator
+          if (-not $validator) {
+            Write-Host "glslangValidator not found after Chocolatey install, falling back to winget..."
+            winget install --id KhronosGroup.VulkanSDK --accept-package-agreements --accept-source-agreements --disable-interactivity
+            $validator = Find-GlslangValidator
+          }
+
+          if (-not $validator) {
+            throw "glslangValidator.exe not found after Vulkan SDK installation."
+          }
+
+          Write-Host "Using glslangValidator: $validator"
+          (Split-Path -Parent $validator) | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $validator --version
 
       - name: Build Desktop
         run: python3 scripts/build.py desktop
