@@ -3,6 +3,7 @@ project(live2d_jni)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+option(LIVE2D_REQUIRE_VULKAN "Fail configure if Vulkan backend cannot be enabled on supported desktop targets." OFF)
 
 find_package(JNI REQUIRED)
 
@@ -26,6 +27,10 @@ if((WIN32 OR (UNIX AND NOT APPLE)) AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND LIVE2D_AR
     endif()
 elseif((WIN32 OR (UNIX AND NOT APPLE)) AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(STATUS "Vulkan backend disabled: only linux-x64/windows-x64 are supported.")
+endif()
+
+if(LIVE2D_REQUIRE_VULKAN AND (WIN32 OR (UNIX AND NOT APPLE)) AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND LIVE2D_ARCH_IS_X64 AND NOT ENABLE_VULKAN)
+    message(FATAL_ERROR "LIVE2D_REQUIRE_VULKAN=ON but Vulkan SDK/dev package was not found. Install Vulkan SDK (Windows) or libvulkan-dev (Linux x64).")
 endif()
 
 if(WIN32)

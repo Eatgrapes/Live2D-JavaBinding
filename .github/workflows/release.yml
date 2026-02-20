@@ -39,13 +39,51 @@ jobs:
         if: contains(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgles2-mesa-dev glslang-tools
+          sudo apt-get install -y libgles2-mesa-dev libvulkan-dev glslang-tools
 
       - name: Install Dependencies (macOS)
         if: contains(matrix.os, 'macos')
         run: brew install glslang
 
-      - name: Install Dependencies (Windows)
+      - name: Install Vulkan SDK (Windows)
+        if: contains(matrix.os, 'windows')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Find-VulkanSdkDir {
+            $patterns = @(
+              'C:\VulkanSDK\*',
+              'C:\Program Files\VulkanSDK\*',
+              "$env:USERPROFILE\VulkanSDK\*"
+            )
+            foreach ($pattern in $patterns) {
+              $dir = Get-ChildItem -Path $pattern -Directory -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending | Select-Object -First 1
+              if ($dir) { return $dir.FullName }
+            }
+            return $null
+          }
+
+          $installed = $false
+          try {
+            winget install --id KhronosGroup.VulkanSDK --accept-package-agreements --accept-source-agreements --disable-interactivity
+            if ($LASTEXITCODE -eq 0) { $installed = $true }
+          } catch {
+            Write-Host "winget install failed: $($_.Exception.Message)"
+          }
+          if (-not $installed) {
+            choco install vulkan-sdk -y
+          }
+
+          $sdkDir = Find-VulkanSdkDir
+          if (-not $sdkDir) { throw "Vulkan SDK not found after installation." }
+
+          Write-Host "Using Vulkan SDK: $sdkDir"
+          "VULKAN_SDK=$sdkDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          (Join-Path $sdkDir 'Bin') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install glslang (Windows)
         if: contains(matrix.os, 'windows')
         shell: pwsh
         run: |
@@ -94,7 +132,14 @@ jobs:
           $toolDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & $tool.FullName --version
 
+      - name: Build Desktop (Require Vulkan on windows-x64/linux-x64)
+        if: matrix.os == 'windows-latest' || matrix.os == 'ubuntu-latest'
+        env:
+          LIVE2D_REQUIRE_VULKAN: "ON"
+        run: python3 scripts/build.py desktop
+
       - name: Build Desktop
+        if: matrix.os != 'windows-latest' && matrix.os != 'ubuntu-latest'
         run: python3 scripts/build.py desktop
 
       - name: Upload Artifacts

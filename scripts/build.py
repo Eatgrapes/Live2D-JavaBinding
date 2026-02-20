@@ -139,7 +139,11 @@ def build_desktop():
     root = os.getcwd()
     nb = os.path.join(root, "native/build")
     os.makedirs(nb, exist_ok=True)
-    run_cmd(["cmake", ".."], nb)
+    cmake_cmd = ["cmake", ".."]
+    require_vulkan = os.environ.get("LIVE2D_REQUIRE_VULKAN", "").strip().lower()
+    if require_vulkan in ("1", "true", "on", "yes"):
+        cmake_cmd.append("-DLIVE2D_REQUIRE_VULKAN=ON")
+    run_cmd(cmake_cmd, nb)
     run_cmd(["cmake", "--build", ".", "--config", "Release"], nb)
     
     out_res = os.path.join(root, "out", "native_res", tag)

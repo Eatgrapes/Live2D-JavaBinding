@@ -18,6 +18,7 @@ target/
 
 # Python
 __pycache__/
+*.pyc
 # Java crash logs
 hs_err_pid*.log
 replay_pid*.log
