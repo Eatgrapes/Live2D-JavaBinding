@@ -19,6 +19,9 @@ def find_shader_compiler():
     glslang = shutil.which("glslangValidator")
     if glslang:
         return ("glslangValidator", glslang)
+    glslang_bin = shutil.which("glslang")
+    if glslang_bin:
+        return ("glslang", glslang_bin)
     glslc = shutil.which("glslc")
     if glslc:
         return ("glslc", glslc)
@@ -32,7 +35,7 @@ def compile_vulkan_shaders(out_dir):
 
     compiler_kind, compiler_path = find_shader_compiler()
     if compiler_path is None:
-        print("Vulkan shader compiler not found. Please install glslangValidator or glslc.")
+        print("Vulkan shader compiler not found. Please install glslangValidator, glslang, or glslc.")
         print("Vulkan backend requires SPIR-V shader binaries.")
         sys.exit(1)
 
@@ -41,7 +44,7 @@ def compile_vulkan_shaders(out_dir):
             continue
         src_file = os.path.join(shader_src_dir, f)
         out_file = os.path.join(out_dir, f.rsplit(".", 1)[0] + ".spv")
-        if compiler_kind == "glslangValidator":
+        if compiler_kind in ("glslangValidator", "glslang"):
             run_cmd([compiler_path, "-V", src_file, f"-I{shader_src_dir}", "-o", out_file])
         else:
             run_cmd([compiler_path, src_file, f"-I{shader_src_dir}", "-o", out_file])
