@@ -105,7 +105,9 @@ def apply_sdk_patches():
 def download_sdk():
     if not os.path.exists(SDK_DIR):
         print("Downloading SDK...")
-        urllib.request.urlretrieve(SDK_URL, "sdk.zip")
+        req = urllib.request.Request(SDK_URL, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response, open("sdk.zip", 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
         with zipfile.ZipFile("sdk.zip", 'r') as z: z.extractall("temp")
         inner = [d for d in os.listdir("temp") if os.path.isdir(os.path.join("temp", d))][0]
         shutil.move(os.path.join("temp", inner), SDK_DIR)
