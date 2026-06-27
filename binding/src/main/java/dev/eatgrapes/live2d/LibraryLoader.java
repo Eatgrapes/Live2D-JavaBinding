@@ -1,8 +1,11 @@
 package dev.eatgrapes.live2d;
 
 import java.io.*;
+import java.lang.module.ModuleReference;
+import java.lang.module.ResolvedModule;
 import java.nio.file.*;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Handles loading of the native Live2D JNI library.
@@ -10,6 +13,8 @@ import java.util.Locale;
  * This class automatically detects the current operating system and architecture,
  * extracts the appropriate shared library from the JAR, and loads it.
  * On Android, it delegates to the system's library loader.
+ * <p>
+ * Supports both classpath-based and JPMS modular environments.
  */
 public class LibraryLoader {
     private static boolean loaded = false;
@@ -25,6 +30,58 @@ public class LibraryLoader {
             "FragShaderSrcMaskPremultipliedAlpha.spv",
             "FragShaderSrcMaskInvertedPremultipliedAlpha.spv"
     };
+
+    /**
+     * Resolves a resource as an {@link InputStream}, working in both classpath and JPMS environments.
+     * <p>
+     * Tries the following strategies in order:
+     * <ol>
+     *   <li>{@code Class.getResourceAsStream} — works in non-modular (classpath) setups.</li>
+     *   <li>{@code ClassLoader.getResourceAsStream} — works across modules on the module-path
+     *       because the system class loader can see resources from all layers.</li>
+     *   <li>Scanning {@link ModuleLayer#boot()} for the resource — explicit JPMS cross-module access
+     *       when the native resources live in a separate named module.</li>
+     * </ol>
+     *
+     * @param resourcePath absolute resource path, e.g. {@code "/windows-x64/live2d_jni.dll"}.
+     * @return an open {@code InputStream}, or {@code null} if the resource was not found.
+     */
+    private static InputStream getResourceStream(String resourcePath) {
+        // 1. Same-module lookup (classic classpath)
+        InputStream is = LibraryLoader.class.getResourceAsStream(resourcePath);
+        if (is != null) return is;
+
+        // 2. ClassLoader-level lookup (crosses automatic-module boundaries)
+        String classLoaderPath = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
+        is = ClassLoader.getSystemResourceAsStream(classLoaderPath);
+        if (is != null) return is;
+
+        // Also try the thread-context class loader (useful in frameworks like OSGi / app servers)
+        ClassLoader tcl = Thread.currentThread().getContextClassLoader();
+        if (tcl != null) {
+            is = tcl.getResourceAsStream(classLoaderPath);
+            if (is != null) return is;
+        }
+
+        // 3. Explicit JPMS ModuleLayer scan — handles named modules that encapsulate resources
+        ModuleLayer bootLayer = ModuleLayer.boot();
+        for (ResolvedModule rm : bootLayer.configuration().modules()) {
+            Optional<ModuleReference> refOpt = Optional.of(rm.reference());
+            if (refOpt.isPresent()) {
+                try {
+                    Module module = bootLayer.findModule(rm.name()).orElse(null);
+                    if (module != null) {
+                        is = module.getResourceAsStream(resourcePath);
+                        if (is != null) return is;
+                    }
+                } catch (IOException ignored) {
+                    // Continue searching other modules
+                }
+            }
+        }
+
+        return null;
+    }
 
     /**
      * Loads the native library.
@@ -66,7 +123,7 @@ public class LibraryLoader {
         String libName = System.mapLibraryName("live2d_jni");
         String resourcePath = "/" + platformTag + "/" + libName;
 
-        try (InputStream is = LibraryLoader.class.getResourceAsStream(resourcePath)) {
+        try (InputStream is = getResourceStream(resourcePath)) {
             if (is == null) throw new RuntimeException("Native lib not found: " + resourcePath);
 
             Path tempDir = Files.createTempDirectory("live2d_native");
@@ -93,7 +150,7 @@ public class LibraryLoader {
         String fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
         String shaderGroup = fileName.endsWith(".spv") ? "vulkan" : "opengl";
         String internalPath = "/live2d/shaders/" + shaderGroup + "/" + fileName;
-        try (InputStream is = LibraryLoader.class.getResourceAsStream(internalPath)) {
+        try (InputStream is = getResourceStream(internalPath)) {
             if (is == null) return null;
             return is.readAllBytes();
         } catch (IOException e) {
@@ -115,7 +172,7 @@ public class LibraryLoader {
                     continue;
                 }
                 String internalPath = "/live2d/shaders/vulkan/" + fileName;
-                try (InputStream is = LibraryLoader.class.getResourceAsStream(internalPath)) {
+                try (InputStream is = getResourceStream(internalPath)) {
                     if (is == null) {
                         throw new RuntimeException("Vulkan shader not found in resources: " + internalPath);
                     }

@@ -250,8 +250,21 @@ def package_jars():
             if not os.path.isfile(src):
                 continue
             shutil.copy(src, tmp_pkg)
-        
-        run_cmd(["jar", "--create", "--file", os.path.join(out, jar_name), "-C", os.path.join(out, "tmp_pkg"), "."])
+
+        # Create MANIFEST.MF with Automatic-Module-Name for JPMS compatibility.
+        # Without this, the JAR filename 'live2d-native-...' maps to the module
+        # name 'live2d.native' which is invalid because 'native' is a reserved keyword.
+        manifest_dir = os.path.join(out, "tmp_pkg", "META-INF")
+        os.makedirs(manifest_dir, exist_ok=True)
+        manifest_path = os.path.join(manifest_dir, "MANIFEST.MF")
+        with open(manifest_path, "w", encoding="utf-8") as mf:
+            mf.write("Manifest-Version: 1.0\n")
+            mf.write("Automatic-Module-Name: dev.eatgrapes.live2d.natives\n")
+            mf.write("\n")
+
+        run_cmd(["jar", "--create", "--file", os.path.join(out, jar_name),
+                 "--manifest", manifest_path,
+                 "-C", os.path.join(out, "tmp_pkg"), "."])
         shutil.rmtree(os.path.join(out, "tmp_pkg"))
 
 if __name__ == "__main__":
